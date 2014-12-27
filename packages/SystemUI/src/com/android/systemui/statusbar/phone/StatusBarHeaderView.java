@@ -24,6 +24,7 @@ import android.content.Context;
 import android.database.ContentObserver;
 import android.net.Uri;
 import android.os.Handler;
+import android.os.UserHandle;
 import android.provider.Settings;
 import android.content.Intent;
 import android.content.res.Configuration;
@@ -112,6 +113,12 @@ public class StatusBarHeaderView extends RelativeLayout implements View.OnClickL
     private int mClockCollapsedSize;
     private int mClockExpandedSize;
 
+    // HeadsUp button
+    protected int mDrawable;
+    private View mHeadsUpButton;
+    private boolean mShowHeadsUpButton;
+    private boolean mHeadsUpEnabled;
+
     /**
      * In collapsed QS, the clock and avatar are scaled down a bit post-layout to allow for a nice
      * transition. These values determine that factor.
@@ -142,6 +149,7 @@ public class StatusBarHeaderView extends RelativeLayout implements View.OnClickL
     private ContentObserver mObserver = new ContentObserver(new Handler()) {
         public void onChange(boolean selfChange, Uri uri) {
             loadShowBatteryTextSetting();
+            showHeadsUpButton();
         }
     };
     private SettingsObserver mSettingsObserver;
@@ -150,11 +158,17 @@ public class StatusBarHeaderView extends RelativeLayout implements View.OnClickL
     public StatusBarHeaderView(Context context, AttributeSet attrs) {
         super(context, attrs);
         loadShowBatteryTextSetting();
+        showHeadsUpButton();
     }
 
     private void loadShowBatteryTextSetting() {
         mShowBatteryText = Settings.System.getInt(getContext().getContentResolver(),
                 Settings.System.STATUS_BAR_SHOW_BATTERY_PERCENT, 0);
+    }
+
+    private void showHeadsUpButton() {
+        mShowHeadsUpButton = Settings.System.getInt(getContext().getContentResolver(),
+                Settings.System.HEADS_UP_SHOW_STATUS_BUTTON, 0) == 1;
     }
 
     @Override
@@ -178,6 +192,10 @@ public class StatusBarHeaderView extends RelativeLayout implements View.OnClickL
         if (getResources().getBoolean(R.bool.config_showTaskManagerSwitcher)) {
             mTaskManagerButton = findViewById(R.id.task_manager_button);
         }
+        if (mShowHeadsUpButton) {
+            mHeadsUpButton = findViewById(R.id.heads_up_button);
+            mHeadsUpButton.setOnClickListener(this);
+        }
         mQsDetailHeader = findViewById(R.id.qs_detail_header);
         mQsDetailHeader.setAlpha(0);
         mQsDetailHeaderTitle = (TextView) mQsDetailHeader.findViewById(android.R.id.title);
@@ -198,6 +216,7 @@ public class StatusBarHeaderView extends RelativeLayout implements View.OnClickL
         updateVisibilities();
         updateClockScale();
         updateAvatarScale();
+        updateHeadsUpButton();
         addOnLayoutChangeListener(new View.OnLayoutChangeListener() {
             @Override
             public void onLayoutChange(View v, int left, int top, int right,
@@ -374,7 +393,10 @@ public class StatusBarHeaderView extends RelativeLayout implements View.OnClickL
         if (mTaskManagerButton != null) {
             mTaskManagerButton.setVisibility(mExpanded ? View.VISIBLE : View.GONE);
         }
-        mQsDetailHeader.setVisibility(mExpanded && mShowingDetail? View.VISIBLE : View.INVISIBLE);
+        if (mHeadsUpButton != null) {
+            mHeadsUpButton.setVisibility(mExpanded && mShowHeadsUpButton ? View.VISIBLE : View.GONE);
+        }
+        mQsDetailHeader.setVisibility(mExpanded && mShowingDetail ? View.VISIBLE : View.INVISIBLE);
         if (mSignalCluster != null) {
             updateSignalClusterDetachment();
         }
@@ -402,10 +424,12 @@ public class StatusBarHeaderView extends RelativeLayout implements View.OnClickL
 
     private void updateSystemIconsLayoutParams() {
         RelativeLayout.LayoutParams lp = (LayoutParams) mSystemIconsSuperContainer.getLayoutParams();
-        int baseId = mTaskManagerButton != null
-                ? mTaskManagerButton.getId() : mSettingsButton.getId();
+        //int baseId = mTaskManagerButton != null // fix this
+        //        ? mTaskManagerButton.getId() : mSettingsButton.getId();
+        int headsUp = mHeadsUpButton != null
+                ? mHeadsUpButton.getId() : mSettingsButton.getId();
         int rule = mExpanded
-                ? baseId
+                ? headsUp
                 : mMultiUserSwitch.getId();
         if (rule != lp.getRules()[RelativeLayout.START_OF]) {
             lp.addRule(RelativeLayout.START_OF, rule);
@@ -579,6 +603,10 @@ public class StatusBarHeaderView extends RelativeLayout implements View.OnClickL
             startDateActivity();
         } else if (v == mWeatherContainer) {
             startForecastActivity();
+        } else if (v == mHeadsUpButton) {
+            Settings.System.putIntForUser(mContext.getContentResolver(),
+                Settings.System.HEADS_UP_NOTIFICATION,
+                    mHeadsUpEnabled ? 0 : 1, UserHandle.USER_CURRENT);
         }
     }
 
@@ -663,6 +691,7 @@ public class StatusBarHeaderView extends RelativeLayout implements View.OnClickL
         }
         target.batteryY = mSystemIconsSuperContainer.getTop() + mSystemIconsContainer.getTop();
         target.batteryLevelAlpha = getAlphaForVisibility(mBatteryLevel);
+        target.headsUpAlpha = getAlphaForVisibility(mHeadsUpButton);
         target.taskManagerAlpha = getAlphaForVisibility(mTaskManagerButton);
         target.settingsAlpha = getAlphaForVisibility(mSettingsButton);
         target.settingsTranslation = mExpanded
@@ -671,7 +700,16 @@ public class StatusBarHeaderView extends RelativeLayout implements View.OnClickL
         if (mTaskManagerButton != null) {
             target.taskManagerTranslation = mExpanded
                     ? 0
-                    : mSettingsButton.getLeft() - mTaskManagerButton.getLeft();
+                    :  mSettingsButton.getLeft() - mTaskManagerButton.getLeft();
+        }
+        if (mHeadsUpButton != null && mTaskManagerButton != null) {
+            target.headsUpTranslation = mExpanded
+                    ? 0
+                    :  mTaskManagerButton.getLeft() - mHeadsUpButton.getLeft();
+        } else {
+            target.headsUpTranslation = mExpanded
+                    ? 0
+                    :  mSettingsButton.getLeft() - mHeadsUpButton.getLeft();
         }
         target.signalClusterAlpha = mSignalClusterDetached ? 0f : 1f;
         target.settingsRotation = !mExpanded ? 90f : 0f;
@@ -731,6 +769,11 @@ public class StatusBarHeaderView extends RelativeLayout implements View.OnClickL
         if (mTaskManagerButton != null) {
             mTaskManagerButton.setTranslationX(values.taskManagerTranslation);
         }
+        if (mHeadsUpButton != null) {
+            mHeadsUpButton.setTranslationY(mSystemIconsSuperContainer.getTranslationY());
+            mHeadsUpButton.setTranslationX(values.headsUpTranslation);
+            mHeadsUpButton.setRotation(values.settingsRotation);
+        }
         applyAlpha(mEmergencyCallsOnly, values.emergencyCallsOnlyAlpha);
         if (!mShowingDetail) {
             // Otherwise it needs to stay invisible
@@ -739,6 +782,7 @@ public class StatusBarHeaderView extends RelativeLayout implements View.OnClickL
         applyAlpha(mDateCollapsed, values.dateCollapsedAlpha);
         applyAlpha(mDateExpanded, values.dateExpandedAlpha);
         applyAlpha(mBatteryLevel, values.batteryLevelAlpha);
+        applyAlpha(mHeadsUpButton, values.headsUpAlpha);
         applyAlpha(mTaskManagerButton, values.taskManagerAlpha);
         applyAlpha(mSettingsButton, values.settingsAlpha);
         applyAlpha(mWeatherLine1, values.settingsAlpha);
@@ -770,6 +814,8 @@ public class StatusBarHeaderView extends RelativeLayout implements View.OnClickL
         float batteryX;
         float batteryY;
         float batteryLevelAlpha;
+        float headsUpAlpha;
+        float headsUpTranslation;
         float taskManagerAlpha;
         float taskManagerTranslation;
         float settingsAlpha;
@@ -787,6 +833,8 @@ public class StatusBarHeaderView extends RelativeLayout implements View.OnClickL
             avatarY = v1.avatarY * (1 - t) + v2.avatarY * t;
             batteryX = v1.batteryX * (1 - t) + v2.batteryX * t;
             batteryY = v1.batteryY * (1 - t) + v2.batteryY * t;
+            headsUpTranslation =
+                    v1.headsUpTranslation * (1 - t) + v2.headsUpTranslation * t;
             taskManagerTranslation =
                     v1.taskManagerTranslation * (1 - t) + v2.taskManagerTranslation * t;
             settingsTranslation = v1.settingsTranslation * (1 - t) + v2.settingsTranslation * t;
@@ -802,6 +850,7 @@ public class StatusBarHeaderView extends RelativeLayout implements View.OnClickL
 
             float t3 = Math.max(0, t - 0.7f) / 0.3f;
             batteryLevelAlpha = v1.batteryLevelAlpha * (1 - t3) + v2.batteryLevelAlpha * t3;
+            headsUpAlpha = v1.headsUpAlpha * (1 - t3) + v2.headsUpAlpha * t3;
             taskManagerAlpha = v1.taskManagerAlpha * (1 - t3) + v2.taskManagerAlpha * t3;
             settingsAlpha = v1.settingsAlpha * (1 - t3) + v2.settingsAlpha * t3;
             dateExpandedAlpha = v1.dateExpandedAlpha * (1 - t3) + v2.dateExpandedAlpha * t3;
@@ -917,6 +966,8 @@ public class StatusBarHeaderView extends RelativeLayout implements View.OnClickL
         super.onAttachedToWindow();
         getContext().getContentResolver().registerContentObserver(Settings.System.getUriFor(
                 "status_bar_show_battery_percent"), false, mObserver);
+        getContext().getContentResolver().registerContentObserver(Settings.System.getUriFor(
+                "heads_up_show_status_button"), false, mObserver);
     }
 
     @Override
@@ -937,6 +988,8 @@ public class StatusBarHeaderView extends RelativeLayout implements View.OnClickL
             ContentResolver resolver = mContext.getContentResolver();
             resolver.registerContentObserver(Settings.System.getUriFor(
                     Settings.System.STATUS_BAR_SHOW_WEATHER), false, this);
+            resolver.registerContentObserver(Settings.System.getUriFor(
+                    Settings.System.HEADS_UP_NOTIFICATION), false, this);
             update();
         }
 
@@ -959,7 +1012,21 @@ public class StatusBarHeaderView extends RelativeLayout implements View.OnClickL
             ContentResolver resolver = mContext.getContentResolver();
             mShowWeather = Settings.System.getInt(
                     resolver, Settings.System.STATUS_BAR_SHOW_WEATHER, 1) == 1;
+            mHeadsUpEnabled = Settings.System.getInt(
+                    resolver, Settings.System.HEADS_UP_NOTIFICATION, 1) == 1;
             updateVisibilities();
+            updateHeadsUpButton();
+        }
+    }
+
+    private void updateHeadsUpButton() {
+        Drawable d = getResources().getDrawable(R.drawable.ic_heads_up);
+        ImageView image = (ImageView)findViewById(R.id.heads_up_button);
+        if (mHeadsUpEnabled) {
+            image.setImageDrawable(d);
+        } else {
+            image.setImageDrawable(
+                    getResources().getDrawable(R.drawable.ic_heads_up_off));
         }
     }
 }
