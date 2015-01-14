@@ -39,6 +39,8 @@
 
     <!-- label for item that opens the profile choosing dialog -->
     <string name="global_action_choose_profile">Profil</string>
+     <!-- label for item that screenshots in phone options dialog -->
+    <string name="global_action_screenshot">Bildschrimfoto</string>
 
 
     <!-- Title of a category of application permissions, listed so the user can choose whether they want to allow the application to do this. -->
