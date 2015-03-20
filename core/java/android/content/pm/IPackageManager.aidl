@@ -17,6 +17,7 @@
 
 package android.content.pm;
 
+import android.app.ComposedIconInfo;
 import android.content.ComponentName;
 import android.content.Intent;
 import android.content.IntentFilter;
@@ -436,6 +437,7 @@ interface IPackageManager {
 
     boolean isFirstBoot();
     boolean isOnlyCoreApps();
+    boolean isUpgrade();
 
     void setPermissionEnforced(String permission, boolean enforced);
     boolean isPermissionEnforced(String permission);
@@ -455,4 +457,15 @@ interface IPackageManager {
     KeySet getSigningKeySet(String packageName);
     boolean isPackageSignedByKeySet(String packageName, in KeySet ks);
     boolean isPackageSignedByKeySetExactly(String packageName, in KeySet ks);
+
+    /** Themes */
+    void updateIconMapping(String pkgName);
+    ComposedIconInfo getComposedIconInfo();
+    int processThemeResources(String themePkgName);
+
+    /** Package interception */
+    void setPreLaunchCheckActivity(in ComponentName componentName);
+    void addPreLaunchCheckPackage(String packageName);
+    void removePreLaunchCheckPackage(String packageName);
+    void clearPreLaunchCheckPackages();
 }

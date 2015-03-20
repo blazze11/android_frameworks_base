@@ -16,6 +16,7 @@
 
 package com.android.internal.os;
 
+import android.graphics.Typeface;
 import android.net.Credentials;
 import android.net.LocalSocket;
 import android.os.Process;
@@ -214,6 +215,10 @@ class ZygoteConnection {
                 ZygoteInit.setCloseOnExec(serverPipeFd, true);
             }
 
+            if (parsedArgs.refreshTheme) {
+                Typeface.recreateDefaults();
+            }
+
             /**
              * In order to avoid leaking descriptors to the Zygote child,
              * the native code must close the two Zygote socket descriptors
@@ -410,6 +415,9 @@ class ZygoteConnection {
          */
         String appDataDir;
 
+        /** from --refresh_theme */
+        boolean refreshTheme;
+
         /**
          * Constructs instance and parses args
          * @param args zygote command-line args
@@ -569,6 +577,8 @@ class ZygoteConnection {
                     instructionSet = arg.substring(arg.indexOf('=') + 1);
                 } else if (arg.startsWith("--app-data-dir=")) {
                     appDataDir = arg.substring(arg.indexOf('=') + 1);
+                } else if (arg.equals("--refresh_theme")) {
+                    refreshTheme = true;
                 } else {
                     break;
                 }
@@ -842,7 +852,12 @@ class ZygoteConnection {
             if (args.niceName != null) {
                 String property = "wrap." + args.niceName;
                 if (property.length() > 31) {
-                    property = property.substring(0, 31);
+                    // Avoid creating an illegal property name when truncating.
+                    if (property.charAt(30) != '.') {
+                        property = property.substring(0, 31);
+                    } else {
+                        property = property.substring(0, 30);
+                    }
                 }
                 args.invokeWith = SystemProperties.get(property);
                 if (args.invokeWith != null && args.invokeWith.length() == 0) {

@@ -18,6 +18,8 @@ package com.android.systemui.statusbar.phone;
 
 import android.content.Context;
 import android.os.SystemProperties;
+import android.os.UserHandle;
+import android.provider.Settings;
 import android.text.TextUtils;
 import android.util.Log;
 import android.util.MathUtils;
@@ -46,37 +48,97 @@ public class DozeParameters {
     public void dump(PrintWriter pw) {
         pw.println("  DozeParameters:");
         pw.print("    getDisplayStateSupported(): "); pw.println(getDisplayStateSupported());
-        pw.print("    getPulseDuration(): "); pw.println(getPulseDuration());
-        pw.print("    getPulseInDuration(): "); pw.println(getPulseInDuration());
+        pw.print("    getPulseDuration(pickup=false): "); pw.println(getPulseDuration(false));
+        pw.print("    getPulseDuration(pickup=true): "); pw.println(getPulseDuration(true));
+        pw.print("    getPulseInDuration(pickup=false): "); pw.println(getPulseInDuration(false));
+        pw.print("    getPulseInDuration(pickup=true): "); pw.println(getPulseInDuration(true));
+        pw.print("    getPulseInDelay(pickup=false): "); pw.println(getPulseInDelay(false));
+        pw.print("    getPulseInDelay(pickup=true): "); pw.println(getPulseInDelay(true));
         pw.print("    getPulseInVisibleDuration(): "); pw.println(getPulseVisibleDuration());
         pw.print("    getPulseOutDuration(): "); pw.println(getPulseOutDuration());
         pw.print("    getPulseOnSigMotion(): "); pw.println(getPulseOnSigMotion());
         pw.print("    getVibrateOnSigMotion(): "); pw.println(getVibrateOnSigMotion());
         pw.print("    getPulseOnPickup(): "); pw.println(getPulseOnPickup());
         pw.print("    getVibrateOnPickup(): "); pw.println(getVibrateOnPickup());
+        pw.print("    getProxCheckBeforePulse(): "); pw.println(getProxCheckBeforePulse());
         pw.print("    getPulseOnNotifications(): "); pw.println(getPulseOnNotifications());
         pw.print("    getPulseSchedule(): "); pw.println(getPulseSchedule());
         pw.print("    getPulseScheduleResets(): "); pw.println(getPulseScheduleResets());
         pw.print("    getPickupVibrationThreshold(): "); pw.println(getPickupVibrationThreshold());
+        pw.print("    getPickupPerformsProxCheck(): "); pw.println(getPickupPerformsProxCheck());
+    }
+
+    public boolean getOverwriteValue() {
+        final int values = Settings.System.getIntForUser(mContext.getContentResolver(),
+               Settings.System.DOZE_OVERWRITE_VALUE, 0,
+                    UserHandle.USER_CURRENT);
+        return values != 0;
+    }
+
+    public boolean getPocketMode() {
+        final int values = Settings.System.getIntForUser(mContext.getContentResolver(),
+               Settings.System.DOZE_POCKET_MODE, 0,
+                    UserHandle.USER_CURRENT);
+        return values != 0;
+    }
+
+    public boolean getShakeMode() {
+        final int values = Settings.System.getIntForUser(mContext.getContentResolver(),
+               Settings.System.DOZE_SHAKE_MODE, 0,
+                    UserHandle.USER_CURRENT);
+        return values != 0;
+    }
+
+    public boolean getTimeMode() {
+        final int values = Settings.System.getIntForUser(mContext.getContentResolver(),
+               Settings.System.DOZE_TIME_MODE, 0,
+                    UserHandle.USER_CURRENT);
+        return values != 0;
+    }
+
+    public boolean getFullMode() {
+        return getTimeMode() && getPocketMode();
+    }
+
+    public boolean getHalfMode() {
+        return !getTimeMode() && getPocketMode();
     }
 
     public boolean getDisplayStateSupported() {
         return getBoolean("doze.display.supported", R.bool.doze_display_state_supported);
     }
 
-    public int getPulseDuration() {
-        return getPulseInDuration() + getPulseVisibleDuration() + getPulseOutDuration();
+    public int getPulseDuration(boolean pickup) {
+        return getPulseInDuration(pickup) + getPulseVisibleDuration() + getPulseOutDuration();
     }
 
-    public int getPulseInDuration() {
-        return getInt("doze.pulse.duration.in", R.integer.doze_pulse_duration_in);
+    public int getPulseInDuration(boolean pickup) {
+        return pickup
+                ? getInt("doze.pulse.duration.in.pickup", R.integer.doze_pulse_duration_in_pickup)
+                : getInt("doze.pulse.duration.in", R.integer.doze_pulse_duration_in);
+    }
+
+    public int getPulseInDelay(boolean pickup) {
+        return pickup
+                ? getInt("doze.pulse.delay.in.pickup", R.integer.doze_pulse_delay_in_pickup)
+                : getInt("doze.pulse.delay.in", R.integer.doze_pulse_delay_in);
     }
 
     public int getPulseVisibleDuration() {
+        if (getOverwriteValue()) {
+            return Settings.System.getIntForUser(mContext.getContentResolver(),
+                Settings.System.DOZE_PULSE_DURATION_VISIBLE, R.integer.doze_pulse_duration_visible,
+                    UserHandle.USER_CURRENT);
+        }
         return getInt("doze.pulse.duration.visible", R.integer.doze_pulse_duration_visible);
     }
 
     public int getPulseOutDuration() {
+        if (getOverwriteValue()) {
+            return Settings.System.getIntForUser(mContext.getContentResolver(),
+                Settings.System.DOZE_PULSE_DURATION_OUT, R.integer.doze_pulse_duration_out,
+                    UserHandle.USER_CURRENT);
+        }
         return getInt("doze.pulse.duration.out", R.integer.doze_pulse_duration_out);
     }
 
@@ -96,7 +158,21 @@ public class DozeParameters {
         return SystemProperties.getBoolean("doze.vibrate.pickup", false);
     }
 
+    public boolean getProxCheckBeforePulse() {
+        return getBoolean("doze.pulse.proxcheck", R.bool.doze_proximity_check_before_pulse);
+    }
+
+    public boolean getPickupPerformsProxCheck() {
+        return getBoolean("doze.pickup.proxcheck", R.bool.doze_pickup_performs_proximity_check);
+    }
+
     public boolean getPulseOnNotifications() {
+        if (getOverwriteValue() || setUsingAccelerometerAsSensorPickUp()) {
+            final int values = Settings.System.getIntForUser(mContext.getContentResolver(),
+                   Settings.System.DOZE_PULSE_ON_NOTIFICATIONS, 1,
+                    UserHandle.USER_CURRENT);
+            return values != 0;
+        }
         return getBoolean("doze.pulse.notifications", R.bool.doze_pulse_on_notifications);
     }
 
@@ -114,6 +190,19 @@ public class DozeParameters {
 
     public int getPickupVibrationThreshold() {
         return getInt("doze.pickup.vibration.threshold", R.integer.doze_pickup_vibration_threshold);
+    }
+
+    public int getShakeAccelerometerThreshold() {
+        if (getOverwriteValue()) {
+            return Settings.System.getIntForUser(mContext.getContentResolver(),
+                Settings.System.DOZE_SHAKE_ACC_THRESHOLD, R.integer.doze_shake_accelerometer_threshold,
+                    UserHandle.USER_CURRENT);
+        }
+        return getInt("doze.shake.acc.threshold", R.integer.doze_shake_accelerometer_threshold);
+    }
+
+    public boolean setUsingAccelerometerAsSensorPickUp() {
+        return getBoolean("doze.use.accelerometer", com.android.internal.R.bool.config_dozeUseAccelerometer);
     }
 
     private boolean getBoolean(String propName, int resId) {

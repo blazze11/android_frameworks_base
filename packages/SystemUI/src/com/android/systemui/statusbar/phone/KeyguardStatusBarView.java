@@ -24,6 +24,7 @@ import android.database.ContentObserver;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Handler;
+import android.os.UserHandle;
 import android.provider.Settings;
 import android.util.AttributeSet;
 import android.view.View;
@@ -41,14 +42,14 @@ import com.android.systemui.statusbar.policy.BatteryController;
 import com.android.systemui.statusbar.policy.KeyguardUserSwitcher;
 import com.android.systemui.statusbar.policy.UserInfoController;
 
+import java.text.NumberFormat;
+
 /**
  * The header group on Keyguard.
  */
-public class KeyguardStatusBarView extends RelativeLayout
-        implements BatteryController.BatteryStateChangeCallback {
+public class KeyguardStatusBarView extends RelativeLayout {
 
     private boolean mKeyguardUserSwitcherShowing;
-    private boolean mBatteryListening;
 
     private int mShowCarrierLabel;
     private TextView mCarrierLabel;
@@ -77,8 +78,8 @@ public class KeyguardStatusBarView extends RelativeLayout
     }
 
     private void showStatusBarCarrier() {
-        mShowCarrierLabel = Settings.System.getInt(getContext().getContentResolver(),
-                Settings.System.STATUS_BAR_SHOW_CARRIER, 1);
+        mShowCarrierLabel = Settings.System.getIntForUser(getContext().getContentResolver(),
+                Settings.System.STATUS_BAR_SHOW_CARRIER, 1, UserHandle.USER_CURRENT);
     }
 
     @Override
@@ -132,18 +133,6 @@ public class KeyguardStatusBarView extends RelativeLayout
         }
     }
 
-    public void setListening(boolean listening) {
-        if (listening == mBatteryListening) {
-            return;
-        }
-        mBatteryListening = listening;
-        if (mBatteryListening) {
-            mBatteryController.addStateChangedCallback(this);
-        } else {
-            mBatteryController.removeStateChangedCallback(this);
-        }
-    }
-
     private void updateUserSwitcher() {
         boolean keyguardSwitcherAvailable = mKeyguardUserSwitcher != null;
         mMultiUserSwitch.setClickable(keyguardSwitcherAvailable);
@@ -164,16 +153,6 @@ public class KeyguardStatusBarView extends RelativeLayout
                 mMultiUserAvatar.setImageDrawable(picture);
             }
         });
-    }
-
-    @Override
-    public void onBatteryLevelChanged(int level, boolean pluggedIn, boolean charging) {
-        // could not care less
-    }
-
-    @Override
-    public void onPowerSaveChanged() {
-        // could not care less
     }
 
     public void setKeyguardUserSwitcher(KeyguardUserSwitcher keyguardUserSwitcher) {

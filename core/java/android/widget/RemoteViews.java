@@ -27,6 +27,7 @@ import android.content.Intent;
 import android.content.IntentSender;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager.NameNotFoundException;
+import android.content.res.ColorStateList;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
@@ -1069,6 +1070,7 @@ public class RemoteViews implements Parcelable, Filter {
         static final int BITMAP = 12;
         static final int BUNDLE = 13;
         static final int INTENT = 14;
+        static final int COLOR_STATE_LIST = 15;
 
         String methodName;
         int type;
@@ -1142,6 +1144,11 @@ public class RemoteViews implements Parcelable, Filter {
                         this.value = Intent.CREATOR.createFromParcel(in);
                     }
                     break;
+                case COLOR_STATE_LIST:
+                    if (in.readInt() != 0) {
+                        this.value = ColorStateList.CREATOR.createFromParcel(in);
+                    }
+                    break;
                 default:
                     break;
             }
@@ -1212,6 +1219,11 @@ public class RemoteViews implements Parcelable, Filter {
                         ((Intent)this.value).writeToParcel(out, flags);
                     }
                     break;
+                case COLOR_STATE_LIST:
+                    out.writeInt(this.value != null ? 1 : 0);
+                    if (this.value != null) {
+                        ((ColorStateList)this.value).writeToParcel(out, flags);
+                    }
                 default:
                     break;
             }
@@ -1247,6 +1259,8 @@ public class RemoteViews implements Parcelable, Filter {
                     return Bundle.class;
                 case INTENT:
                     return Intent.class;
+                case COLOR_STATE_LIST:
+                    return ColorStateList.class;
                 default:
                     return null;
             }
@@ -2207,6 +2221,42 @@ public class RemoteViews implements Parcelable, Filter {
     }
 
     /**
+     * @hide
+     * Equivalent to calling {@link android.widget.ProgressBar#setProgressTintList}.
+     *
+     * @param viewId The id of the view whose tint should change
+     * @param tint the tint to apply, may be {@code null} to clear tint
+     */
+    public void setProgressTintList(int viewId, ColorStateList tint) {
+        addAction(new ReflectionAction(viewId, "setProgressTintList",
+                ReflectionAction.COLOR_STATE_LIST, tint));
+    }
+
+    /**
+     * @hide
+     * Equivalent to calling {@link android.widget.ProgressBar#setProgressBackgroundTintList}.
+     *
+     * @param viewId The id of the view whose tint should change
+     * @param tint the tint to apply, may be {@code null} to clear tint
+     */
+    public void setProgressBackgroundTintList(int viewId, ColorStateList tint) {
+        addAction(new ReflectionAction(viewId, "setProgressBackgroundTintList",
+                ReflectionAction.COLOR_STATE_LIST, tint));
+    }
+
+    /**
+     * @hide
+     * Equivalent to calling {@link android.widget.ProgressBar#setIndeterminateTintList}.
+     *
+     * @param viewId The id of the view whose tint should change
+     * @param tint the tint to apply, may be {@code null} to clear tint
+     */
+    public void setProgressIndeterminateTintList(int viewId, ColorStateList tint) {
+        addAction(new ReflectionAction(viewId, "setIndeterminateTintList",
+                ReflectionAction.COLOR_STATE_LIST, tint));
+    }
+
+    /**
      * Equivalent to calling {@link android.widget.TextView#setTextColor(int)}.
      *
      * @param viewId The id of the view whose text color should change
@@ -2478,6 +2528,26 @@ public class RemoteViews implements Parcelable, Filter {
     }
 
     /**
+     * Equivalent to calling {@link android.view.View#setAccessibilityTraversalBefore(int)}.
+     *
+     * @param viewId The id of the view whose before view in accessibility traversal to set.
+     * @param nextId The id of the next in the accessibility traversal.
+     **/
+    public void setAccessibilityTraversalBefore(int viewId, int nextId) {
+        setInt(viewId, "setAccessibilityTraversalBefore", nextId);
+    }
+
+    /**
+     * Equivalent to calling {@link android.view.View#setAccessibilityTraversalAfter(int)}.
+     *
+     * @param viewId The id of the view whose after view in accessibility traversal to set.
+     * @param nextId The id of the next in the accessibility traversal.
+     **/
+    public void setAccessibilityTraversalAfter(int viewId, int nextId) {
+        setInt(viewId, "setAccessibilityTraversalAfter", nextId);
+    }
+
+    /**
      * Equivalent to calling View.setLabelFor(int).
      *
      * @param viewId The id of the view whose property to set.
@@ -2516,6 +2586,12 @@ public class RemoteViews implements Parcelable, Filter {
 
     /** @hide */
     public View apply(Context context, ViewGroup parent, OnClickHandler handler) {
+        return apply(context, parent, handler, null);
+    }
+
+    /** @hide */
+    public View apply(Context context, ViewGroup parent, OnClickHandler handler,
+            String themePackageName) {
         RemoteViews rvToApply = getRemoteViewsToApply(context);
 
         View result;
@@ -2523,7 +2599,7 @@ public class RemoteViews implements Parcelable, Filter {
         // user. So build a context that loads resources from that user but
         // still returns the current users userId so settings like data / time formats
         // are loaded without requiring cross user persmissions.
-        final Context contextForResources = getContextForResources(context);
+        final Context contextForResources = getContextForResources(context, themePackageName);
         Context inflationContext = new ContextWrapper(context) {
             @Override
             public Resources getResources() {
@@ -2589,14 +2665,14 @@ public class RemoteViews implements Parcelable, Filter {
         }
     }
 
-    private Context getContextForResources(Context context) {
+    private Context getContextForResources(Context context, String themePackageName) {
         if (mApplication != null) {
             if (context.getUserId() == UserHandle.getUserId(mApplication.uid)
                     && context.getPackageName().equals(mApplication.packageName)) {
                 return context;
             }
             try {
-                return context.createApplicationContext(mApplication,
+                return context.createApplicationContext(mApplication, themePackageName,
                         Context.CONTEXT_RESTRICTED);
             } catch (NameNotFoundException e) {
                 Log.e(LOG_TAG, "Package name " + mApplication.packageName + " not found");

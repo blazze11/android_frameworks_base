@@ -25,8 +25,6 @@ public class Constants {
         public static final boolean Verbose = false;
 
         public static class App {
-            // Enables the screenshot app->Recents transition
-            public static final boolean EnableScreenshotAppTransition = false;
             // Enables debug drawing for the transition thumbnail
             public static final boolean EnableTransitionThumbnailDebugMode = false;
             // Enables the filtering of tasks according to their grouping
@@ -58,8 +56,10 @@ public class Constants {
             // clear button location
             public static final int RECENTS_CLEAR_ALL_TOP_RIGHT    = 0;
             public static final int RECENTS_CLEAR_ALL_TOP_LEFT     = 1;
-            public static final int RECENTS_CLEAR_ALL_BOTTOM_RIGHT = 2;
-            public static final int RECENTS_CLEAR_ALL_BOTTOM_LEFT  = 3;
+            public static final int RECENTS_CLEAR_ALL_TOP_CENTER   = 2;
+            public static final int RECENTS_CLEAR_ALL_BOTTOM_RIGHT = 3;
+            public static final int RECENTS_CLEAR_ALL_BOTTOM_LEFT  = 4;
+            public static final int RECENTS_CLEAR_ALL_BOTTOM_CENTER  = 5;
         }
     }
 
@@ -71,13 +71,9 @@ public class Constants {
             public static String DebugModeVersion = "A";
         }
 
-        public static class RecentsTaskLoader {
-            // XXX: This should be calculated on the first load
-            public static final int PreloadFirstTasksCount = 6;
-        }
-
         public static class TaskStackView {
-            public static final int TaskStackOverscrollRange = 150;
+            public static final int TaskStackMinOverscrollRange = 32;
+            public static final int TaskStackMaxOverscrollRange = 128;
             public static final int FilterStartDelay = 25;
         }
     }

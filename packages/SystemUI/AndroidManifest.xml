@@ -55,6 +55,7 @@
     <uses-permission android:name="android.permission.MANAGE_NETWORK_POLICY" />
     <uses-permission android:name="android.permission.CONNECTIVITY_INTERNAL" />
     <uses-permission android:name="android.permission.READ_NETWORK_USAGE_HISTORY" />
+    <uses-permission android:name="android.permission.CONTROL_VPN" />
 
     <!-- Physical hardware -->
     <uses-permission android:name="android.permission.MANAGE_USB" />
@@ -76,7 +77,6 @@
     <uses-permission android:name="android.permission.GET_TOP_ACTIVITY_INFO" />
     <uses-permission android:name="android.permission.MANAGE_ACTIVITY_STACKS" />
     <uses-permission android:name="android.permission.START_TASKS_FROM_RECENTS" />
-    <uses-permission android:name="android.permission.FORCE_STOP_PACKAGES" />
 
     <!-- WindowManager -->
     <uses-permission android:name="android.permission.INTERNAL_SYSTEM_WINDOW" />
@@ -110,7 +110,8 @@
     <!-- Wifi Display -->
     <uses-permission android:name="android.permission.CONFIGURE_WIFI_DISPLAY" />
 
-    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- Torch tile -->
+    <uses-permission android:name="android.permission.ACCESS_TORCH_SERVICE" />
 
     <!-- Screen Capturing -->
     <uses-permission android:name="android.permission.MANAGE_MEDIA_PROJECTION" />
@@ -121,6 +122,17 @@
 
     <!-- Weather -->
     <uses-permission android:name="com.cyanogenmod.lockclock.permission.READ_WEATHER" />
+
+    <!-- Visualizer tile -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- Sync tile -->
+    <uses-permission android:name="android.permission.READ_SYNC_SETTINGS" />
+    <uses-permission android:name="android.permission.WRITE_SYNC_SETTINGS" />
+
+    <!-- Action target -->
+    <uses-permission android:name="android.permission.FORCE_STOP_PACKAGES" />
 
     <application
         android:name=".SystemUIApplication"
@@ -211,6 +223,7 @@
         <!-- Alternate Recents -->
         <activity android:name=".recents.RecentsActivity"
                   android:label="@string/accessibility_desc_recent_apps"
+                  android:exported="false"
                   android:launchMode="singleInstance"
                   android:excludeFromRecents="true"
                   android:stateNotNeeded="true"
@@ -221,11 +234,22 @@
             </intent-filter>
         </activity>
 
+        <receiver android:name=".recents.RecentsUserEventProxyReceiver"
+                  android:exported="false">
+            <intent-filter>
+                <action android:name="com.android.systemui.recents.action.SHOW_RECENTS_FOR_USER" />
+                <action android:name="com.android.systemui.recents.action.HIDE_RECENTS_FOR_USER" />
+                <action android:name="com.android.systemui.recents.action.TOGGLE_RECENTS_FOR_USER" />
+                <action android:name="com.android.systemui.recents.action.PRELOAD_RECENTS_FOR_USER" />
+                <action android:name="com.android.systemui.recents.action.CONFIG_CHANGED_FOR_USER" />
+            </intent-filter>
+        </receiver>
+
         <!-- started from UsbDeviceSettingsManager -->
         <activity android:name=".usb.UsbConfirmActivity"
             android:exported="true"
             android:permission="android.permission.MANAGE_USB"
-            android:theme="@*android:style/Theme.DeviceDefault.Light.Dialog.Alert"
+            android:theme="@style/Theme.SystemUI.Dialog.Alert"
             android:finishOnCloseSystemDialogs="true"
             android:excludeFromRecents="true">
         </activity>
@@ -234,7 +258,7 @@
         <activity android:name=".usb.UsbPermissionActivity"
             android:exported="true"
             android:permission="android.permission.MANAGE_USB"
-            android:theme="@*android:style/Theme.DeviceDefault.Light.Dialog.Alert"
+            android:theme="@style/Theme.SystemUI.Dialog.Alert"
             android:finishOnCloseSystemDialogs="true"
             android:excludeFromRecents="true">
         </activity>
@@ -243,7 +267,7 @@
         <activity android:name=".usb.UsbResolverActivity"
             android:exported="true"
             android:permission="android.permission.MANAGE_USB"
-            android:theme="@*android:style/Theme.DeviceDefault.Light.Dialog.Alert"
+            android:theme="@style/Theme.SystemUI.Dialog.Alert"
             android:finishOnCloseSystemDialogs="true"
             android:excludeFromRecents="true">
         </activity>
@@ -252,7 +276,7 @@
         <activity android:name=".usb.UsbAccessoryUriActivity"
             android:exported="true"
             android:permission="android.permission.MANAGE_USB"
-            android:theme="@*android:style/Theme.DeviceDefault.Light.Dialog.Alert"
+            android:theme="@style/Theme.SystemUI.Dialog.Alert"
             android:finishOnCloseSystemDialogs="true"
             android:excludeFromRecents="true">
         </activity>
@@ -260,7 +284,7 @@
         <!-- started from UsbDebuggingManager -->
         <activity android:name=".usb.UsbDebuggingActivity"
             android:permission="android.permission.MANAGE_USB"
-            android:theme="@*android:style/Theme.DeviceDefault.Light.Dialog.Alert"
+            android:theme="@style/Theme.SystemUI.Dialog.Alert"
             android:finishOnCloseSystemDialogs="true"
             android:excludeFromRecents="true">
         </activity>
@@ -280,7 +304,7 @@
         <activity
             android:name=".media.MediaProjectionPermissionActivity"
             android:exported="true"
-            android:theme="@*android:style/Theme.DeviceDefault.Light.Dialog.Alert"
+            android:theme="@style/Theme.AlertDialogHost"
             android:finishOnCloseSystemDialogs="true"
             android:launchMode="singleTop"
             android:excludeFromRecents="true" />

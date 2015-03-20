@@ -38,6 +38,7 @@ import android.content.pm.ConfigurationInfo;
 import android.content.pm.IPackageDataObserver;
 import android.content.pm.PackageManager;
 import android.content.pm.UserInfo;
+import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.Color;
@@ -56,6 +57,7 @@ import android.text.TextUtils;
 import android.util.DisplayMetrics;
 import android.util.Size;
 import android.util.Slog;
+
 import org.xmlpull.v1.XmlSerializer;
 
 import java.io.FileDescriptor;
@@ -211,6 +213,13 @@ public class ActivityManager {
      * @hide
      */
     public static final int BROADCAST_STICKY_CANT_HAVE_PERMISSION = -1;
+
+    /**
+     * Result for IActivityManager.broadcastIntent: trying to send a broadcast
+     * to a stopped user. Fail.
+     * @hide
+     */
+    public static final int BROADCAST_FAILED_USER_STOPPED = -2;
 
     /**
      * Type for IActivityManaqer.getIntentSender: this PendingIntent is
@@ -1243,26 +1252,16 @@ public class ActivityManager {
     }
 
     /**
-     * If set, the process of the root activity of the task will be killed
-     * as part of removing the task.
-     * @hide
-     */
-    public static final int REMOVE_TASK_KILL_PROCESS = 0x0001;
-
-    /**
      * Completely remove the given task.
      *
      * @param taskId Identifier of the task to be removed.
-     * @param flags Additional operational flags.  May be 0 or
-     * {@link #REMOVE_TASK_KILL_PROCESS}.
      * @return Returns true if the given task was found and removed.
      *
      * @hide
      */
-    public boolean removeTask(int taskId, int flags)
-            throws SecurityException {
+    public boolean removeTask(int taskId) throws SecurityException {
         try {
-            return ActivityManagerNative.getDefault().removeTask(taskId, flags);
+            return ActivityManagerNative.getDefault().removeTask(taskId);
         } catch (RemoteException e) {
             // System dead, we will be dead too soon!
             return false;
@@ -2206,6 +2205,16 @@ public class ActivityManager {
             return null;
         }
     }
+    /**
+     * @hide
+     */
+    public Configuration getConfiguration() {
+        try {
+            return ActivityManagerNative.getDefault().getConfiguration();
+        } catch (RemoteException e) {
+            return null;
+        }
+    }
 
     /**
      * Returns a list of application processes that are running on the device.
@@ -2784,6 +2793,19 @@ public class ActivityManager {
             } catch (RemoteException e) {
                 Slog.e(TAG, "Invalid AppTask", e);
             }
+        }
+    }
+
+    /**
+     * @throws SecurityException Throws SecurityException if the caller does
+     * not hold the {@link android.Manifest.permission#CHANGE_CONFIGURATION} permission.
+     *
+     * @hide
+     */
+    public void updateConfiguration(Configuration values) throws SecurityException {
+        try {
+            ActivityManagerNative.getDefault().updateConfiguration(values);
+        } catch (RemoteException e) {
         }
     }
 }

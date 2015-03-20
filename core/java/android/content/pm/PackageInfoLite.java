@@ -19,6 +19,8 @@ package android.content.pm;
 import android.os.Parcel;
 import android.os.Parcelable;
 
+import com.android.internal.content.PackageHelper;
+
 /**
  * Basic information about a package as specified in its manifest.
  * Utility class used in PackageManager methods
@@ -31,10 +33,18 @@ public class PackageInfoLite implements Parcelable {
      */
     public String packageName;
 
+    /** Names of any split APKs, ordered by parsed splitName */
+    public String[] splitNames;
+
     /**
      * The android:versionCode of the package.
      */
     public int versionCode;
+
+    /** Revision code of base APK */
+    public int baseRevisionCode;
+    /** Revision codes of any split APKs, ordered by parsed splitName */
+    public int[] splitRevisionCodes;
 
     /**
      * The android:multiArch flag from the package manifest. If set,
@@ -52,6 +62,7 @@ public class PackageInfoLite implements Parcelable {
      */
     public int recommendedInstallLocation;
     public int installLocation;
+    public boolean isTheme;
 
     public VerifierInfo[] verifiers;
 
@@ -70,10 +81,14 @@ public class PackageInfoLite implements Parcelable {
 
     public void writeToParcel(Parcel dest, int parcelableFlags) {
         dest.writeString(packageName);
+        dest.writeStringArray(splitNames);
         dest.writeInt(versionCode);
+        dest.writeInt(baseRevisionCode);
+        dest.writeIntArray(splitRevisionCodes);
         dest.writeInt(recommendedInstallLocation);
         dest.writeInt(installLocation);
         dest.writeInt(multiArch ? 1 : 0);
+        dest.writeInt(isTheme ? 1 : 0);
 
         if (verifiers == null || verifiers.length == 0) {
             dest.writeInt(0);
@@ -96,10 +111,14 @@ public class PackageInfoLite implements Parcelable {
 
     private PackageInfoLite(Parcel source) {
         packageName = source.readString();
+        splitNames = source.createStringArray();
         versionCode = source.readInt();
+        baseRevisionCode = source.readInt();
+        splitRevisionCodes = source.createIntArray();
         recommendedInstallLocation = source.readInt();
         installLocation = source.readInt();
         multiArch = (source.readInt() != 0);
+        isTheme = source.readInt() == 1 ? true : false;
 
         final int verifiersLength = source.readInt();
         if (verifiersLength == 0) {

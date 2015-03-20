@@ -3,6 +3,7 @@
 /* //device/apps/common/assets/res/any/strings.xml
 **
 ** Copyright 2014, Euphoria-OS Project
+** Copyright 2013, The ChameleonOS Open Source Project
 **
 ** Licensed under the Apache License, Version 2.0 (the "License");
 ** you may not use this file except in compliance with the License.
@@ -18,8 +19,29 @@
 */
 -->
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
-    <string name="reboot_title">"重启"</string>
-    <string name="reboot_confirm" product="tablet">"您的平板电脑将会重启。"</string>
-    <string name="reboot_confirm" product="default">"您的手机将会重启。"</string>
-    <string name="global_action_reboot">"重启"</string>
+    <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
+    <string name="permlab_recordScreen">录制内容正被展示</string>
+    <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
+    <string name="permdesc_recordScreen">允许程序录制用户屏幕</string>
+
+    <!-- label for screen record item in phone options dialog -->
+    <string name="global_action_screen_record">屏幕录像</string>
+
+    <!-- AOKP custom system animations -->
+    <string name="animation_fade">消隐</string>
+    <string name="animation_slide_right">右滑</string>
+    <string name="animation_slide_left">左滑</string>
+    <string name="animation_slide_right_no_fade">右滑（不消隐）</string>
+    <string name="animation_slide_left_no_fade">左滑（不消隐）</string>
+    <string name="animation_slide_up">下滑</string>
+    <string name="animation_slide_down">上滑</string>
+    <string name="animation_default">默认</string>
+    <string name="animation_translucent">透明</string>
+    <string name="animation_grow_shrink">伸展（上）</string>
+    <string name="animation_grow_shrink_center">伸展（中）</string>
+    <string name="animation_grow_shrink_bottom">伸展（下）</string>
+    <string name="animation_grow_shrink_left">伸展（左）</string>
+    <string name="animation_grow_shrink_right">伸展（右）</string>
+    <string name="action_null">空白</string>
+
 </resources>

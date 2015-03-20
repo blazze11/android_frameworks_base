@@ -307,6 +307,7 @@ enum {
     PUBLIC_KEY_ATTR = 0x010103a6,
     CATEGORY_ATTR = 0x010103e8,
     BANNER_ATTR = 0x10103f2,
+    ISGAME_ATTR = 0x10103f4,
 };
 
 String8 getComponentName(String8 &pkgName, String8 &componentName) {
@@ -515,12 +516,10 @@ static void printFeatureGroup(const FeatureGroup& grp,
 
     const size_t numFeatures = grp.features.size();
     for (size_t i = 0; i < numFeatures; i++) {
-        if (!grp.features[i]) {
-            continue;
-        }
+        const bool required = grp.features[i];
 
         const String8& featureName = grp.features.keyAt(i);
-        printf("  uses-feature: name='%s'\n",
+        printf("  uses-feature%s: name='%s'\n", (required ? "" : "-not-required"),
                 ResTable::normalizeForOutput(featureName.string()).string());
     }
 
@@ -1127,11 +1126,33 @@ int doDump(Bundle* bundle)
                                     error.string());
                             goto bail;
                         }
+
+                        String8 banner = AaptXml::getResolvedAttribute(res, tree, BANNER_ATTR, &error);
+                        if (error != "") {
+                            fprintf(stderr, "ERROR getting 'android:banner' attribute: %s\n",
+                                    error.string());
+                            goto bail;
+                        }
                         printf("application: label='%s' ",
                                 ResTable::normalizeForOutput(label.string()).string());
-                        printf("icon='%s'\n", ResTable::normalizeForOutput(icon.string()).string());
+                        printf("icon='%s'", ResTable::normalizeForOutput(icon.string()).string());
+                        if (banner != "") {
+                            printf(" banner='%s'", ResTable::normalizeForOutput(banner.string()).string());
+                        }
+                        printf("\n");
                         if (testOnly != 0) {
                             printf("testOnly='%d'\n", testOnly);
+                        }
+
+                        int32_t isGame = AaptXml::getResolvedIntegerAttribute(res, tree,
+                                ISGAME_ATTR, 0, &error);
+                        if (error != "") {
+                            fprintf(stderr, "ERROR getting 'android:isGame' attribute: %s\n",
+                                    error.string());
+                            goto bail;
+                        }
+                        if (isGame != 0) {
+                            printf("application-isGame\n");
                         }
 
                         int32_t debuggable = AaptXml::getResolvedIntegerAttribute(res, tree,
@@ -1821,7 +1842,7 @@ int doDump(Bundle* bundle)
                         }
                     }
 
-                   if (!grp.features.isEmpty()) {
+                    if (!grp.features.isEmpty()) {
                         printFeatureGroup(grp);
                     }
                 }
@@ -2420,11 +2441,38 @@ int doPackage(Bundle* bundle)
         goto bail;
     }
 
-    // Write the apk
-    if (outputAPKFile) {
+    if (outputAPKFile || bundle->getOutputResApk()) {
         // Gather all resources and add them to the APK Builder. The builder will then
         // figure out which Split they belong in.
         err = addResourcesToBuilder(assets, builder);
+        if (err != NO_ERROR) {
+            goto bail;
+        }
+    }
+
+    //Write the res apk
+    if (bundle->getOutputResApk()) {
+        const char* resPath = bundle->getOutputResApk();
+        char *endptr;
+        int resApk_fd = strtol(resPath, &endptr, 10);
+
+        if (*endptr == '\0') {
+            //OutputResDir was a file descriptor
+            //Assume there is only one set of assets, when we deal with actual split apks this may have to change
+            err = writeAPK(bundle, resApk_fd, builder->getBaseSplit(), true);
+        } else {
+            //Assume there is only one set of assets, when we deal with actual split apks this may have to change
+            err = writeAPK(bundle, String8(bundle->getOutputResApk()), builder->getBaseSplit(), true);
+        }
+
+        if (err != NO_ERROR) {
+            fprintf(stderr, "ERROR: writing '%s' failed\n", resPath);
+            goto bail;
+        }
+    }
+
+    // Write the apk
+    if (outputAPKFile) {
         if (err != NO_ERROR) {
             goto bail;
         }
@@ -2434,7 +2482,7 @@ int doPackage(Bundle* bundle)
         for (size_t i = 0; i < numSplits; i++) {
             const sp<ApkSplit>& split = splits[i];
             String8 outputPath = buildApkName(String8(outputAPKFile), split);
-            err = writeAPK(bundle, outputPath, split);
+            err = writeAPK(bundle, outputPath, split, false);
             if (err != NO_ERROR) {
                 fprintf(stderr, "ERROR: packaging of '%s' failed\n", outputPath.string());
                 goto bail;
@@ -2512,22 +2560,17 @@ int doSingleCrunch(Bundle* bundle)
 
 int runInDaemonMode(Bundle* bundle) {
     std::cout << "Ready" << std::endl;
-    for (std::string line; std::getline(std::cin, line);) {
-        if (line == "quit") {
+    for (std::string cmd; std::getline(std::cin, cmd);) {
+        if (cmd == "quit") {
             return NO_ERROR;
-        }
-        std::stringstream ss;
-        ss << line;
-        std::string s;
-
-        std::string command, parameterOne, parameterTwo;
-        std::getline(ss, command, ' ');
-        std::getline(ss, parameterOne, ' ');
-        std::getline(ss, parameterTwo, ' ');
-        if (command[0] == 's') {
-            bundle->setSingleCrunchInputFile(parameterOne.c_str());
-            bundle->setSingleCrunchOutputFile(parameterTwo.c_str());
-            std::cout << "Crunching " << parameterOne << std::endl;
+        } else if (cmd == "s") {
+            // Two argument crunch
+            std::string inputFile, outputFile;
+            std::getline(std::cin, inputFile);
+            std::getline(std::cin, outputFile);
+            bundle->setSingleCrunchInputFile(inputFile.c_str());
+            bundle->setSingleCrunchOutputFile(outputFile.c_str());
+            std::cout << "Crunching " << inputFile << std::endl;
             if (doSingleCrunch(bundle) != NO_ERROR) {
                 std::cout << "Error" << std::endl;
             }

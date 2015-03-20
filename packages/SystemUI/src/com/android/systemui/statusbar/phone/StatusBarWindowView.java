@@ -19,7 +19,6 @@ package com.android.systemui.statusbar.phone;
 import android.app.StatusBarManager;
 import android.content.ContentResolver;
 import android.content.Context;
-import android.database.ContentObserver;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.PorterDuff;
@@ -29,10 +28,8 @@ import android.media.session.MediaSessionLegacyHelper;
 import android.net.Uri;
 import android.os.Handler;
 import android.os.IBinder;
-import android.os.IPowerManager;
 import android.os.PowerManager;
-import android.os.RemoteException;
-import android.os.ServiceManager;
+import android.os.UserHandle;
 import android.provider.Settings;
 import android.util.AttributeSet;
 import android.util.Log;
@@ -40,13 +37,12 @@ import android.view.GestureDetector;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewConfiguration;
 import android.view.ViewRootImpl;
 import android.view.WindowManager;
 import android.view.WindowManagerGlobal;
 import android.widget.FrameLayout;
-
 import com.android.systemui.R;
+import com.android.systemui.cm.UserContentObserver;
 import com.android.systemui.statusbar.BaseStatusBar;
 import com.android.systemui.statusbar.DragDownHelper;
 import com.android.systemui.statusbar.StatusBarState;
@@ -126,13 +122,6 @@ public class StatusBarWindowView extends FrameLayout {
             }
         });
 
-
-        mStackScrollLayout = (NotificationStackScrollLayout) findViewById(
-                R.id.notification_stack_scroller);
-        mNotificationPanel = (NotificationPanelView) findViewById(R.id.notification_panel);
-        mDragDownHelper = new DragDownHelper(getContext(), this, mStackScrollLayout, mService);
-        mBrightnessMirror = findViewById(R.id.brightness_mirror);
-
         // We really need to be able to animate while window animations are going on
         // so that activities may be started asynchronously from panel animations
         final ViewRootImpl root = getViewRootImpl();
@@ -208,6 +197,18 @@ public class StatusBarWindowView extends FrameLayout {
 
     @Override
     public boolean onInterceptTouchEvent(MotionEvent ev) {
+        if (mService.getBarState() == StatusBarState.KEYGUARD) {
+            switch (ev.getAction()) {
+                case MotionEvent.ACTION_DOWN:
+                    mService.mKeyguardBottomArea.requestVisualizer(false, 0);
+                    break;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    mService.mKeyguardBottomArea.requestVisualizer(true, 500);
+                    break;
+            }
+        }
+
         boolean intercept = false;
         if (mDoubleTapToSleepEnabled
                 && ev.getY() < mStatusBarHeaderHeight) {
@@ -217,11 +218,12 @@ public class StatusBarWindowView extends FrameLayout {
         if (mNotificationPanel.isFullyExpanded()
                 && mStackScrollLayout.getVisibility() == View.VISIBLE
                 && mService.getBarState() == StatusBarState.KEYGUARD
+                && !mService.isQsExpanded()
                 && !mService.isBouncerShowing()) {
             intercept = mDragDownHelper.onInterceptTouchEvent(ev);
             // wake up on a touch down event, if dozing
             if (ev.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                mService.wakeUpIfDozing(ev.getEventTime(), true);
+                mService.wakeUpIfDozing(ev.getEventTime(), ev);
             }
         }
         if (!intercept) {
@@ -291,38 +293,45 @@ public class StatusBarWindowView extends FrameLayout {
         }
     }
 
-    class SettingsObserver extends ContentObserver {
+    public void addContent(View content) {
+        addView(content);
+        mStackScrollLayout = (NotificationStackScrollLayout) content.findViewById(
+                R.id.notification_stack_scroller);
+        mNotificationPanel = (NotificationPanelView) content.findViewById(R.id.notification_panel);
+        mDragDownHelper = new DragDownHelper(getContext(), this, mStackScrollLayout, mService);
+        mBrightnessMirror = content.findViewById(R.id.brightness_mirror);
+
+    }
+
+    public void removeContent(View content) {
+        removeView(content);
+    }
+
+    private class SettingsObserver extends UserContentObserver {
         SettingsObserver(Handler handler) {
             super(handler);
         }
 
-        void observe() {
+        @Override
+        protected void observe() {
+            super.observe();
             ContentResolver resolver = mContext.getContentResolver();
             resolver.registerContentObserver(Settings.System.getUriFor(
-                    Settings.System.DOUBLE_TAP_SLEEP_GESTURE), false, this);
-            update();
-        }
-
-        void unobserve() {
-            ContentResolver resolver = mContext.getContentResolver();
-            resolver.unregisterContentObserver(this);
-        }
-
-        @Override
-        public void onChange(boolean selfChange) {
+                    Settings.System.DOUBLE_TAP_SLEEP_GESTURE), false, this, UserHandle.USER_ALL);
             update();
         }
 
         @Override
-        public void onChange(boolean selfChange, Uri uri) {
-            update();
+        protected void unobserve() {
+            super.unobserve();
+            mContext.getContentResolver().unregisterContentObserver(this);
         }
 
+        @Override
         public void update() {
             ContentResolver resolver = mContext.getContentResolver();
-            mDoubleTapToSleepEnabled = Settings.System.getInt(
-                    resolver, Settings.System.DOUBLE_TAP_SLEEP_GESTURE, 1) == 1;
+            mDoubleTapToSleepEnabled = Settings.System.getIntForUser(resolver,
+                    Settings.System.DOUBLE_TAP_SLEEP_GESTURE, 1, UserHandle.USER_CURRENT) == 1;
         }
     }
 }
-

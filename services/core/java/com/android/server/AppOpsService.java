@@ -32,6 +32,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import android.app.ActivityManager;
 import android.app.ActivityThread;
 import android.app.AppOpsManager;
 import android.app.Dialog;
@@ -59,7 +60,6 @@ import android.util.Log;
 import android.util.Pair;
 import android.util.Slog;
 import android.util.SparseArray;
-import android.util.SparseIntArray;
 import android.util.TimeUtils;
 import android.util.Xml;
 
@@ -99,10 +99,12 @@ public class AppOpsService extends IAppOpsService.Stub {
     };
 
     boolean mWriteScheduled;
+    boolean mFastWriteScheduled;
     final Runnable mWriteRunner = new Runnable() {
         public void run() {
             synchronized (AppOpsService.this) {
                 mWriteScheduled = false;
+                mFastWriteScheduled = false;
                 AsyncTask<Void, Void, Void> task = new AsyncTask<Void, Void, Void>() {
                     @Override protected Void doInBackground(Void... params) {
                         writeState();
@@ -111,6 +113,14 @@ public class AppOpsService extends IAppOpsService.Stub {
                 };
                 task.executeOnExecutor(AsyncTask.THREAD_POOL_EXECUTOR, (Void[])null);
             }
+        }
+    };
+
+    private Runnable mSuSessionChangedRunner = new Runnable() {
+        @Override
+        public void run() {
+            mContext.sendBroadcastAsUser(new Intent(AppOpsManager.ACTION_SU_SESSION_CHANGED),
+                    UserHandle.ALL);
         }
     };
 
@@ -165,6 +175,7 @@ public class AppOpsService extends IAppOpsService.Stub {
             = new ArrayMap<IBinder, Callback>();
     final SparseArray<SparseArray<Restriction>> mAudioRestrictions
             = new SparseArray<SparseArray<Restriction>>();
+    SparseArray<String> mLoadPrivLaterPkgs;
 
     public final class Callback implements DeathRecipient {
         final IAppOpsCallback mCallback;
@@ -275,8 +286,41 @@ public class AppOpsService extends IAppOpsService.Stub {
                     mUidOps.removeAt(i);
                 }
             }
+
+            IPackageManager packageManager = ActivityThread.getPackageManager();
+            if (mLoadPrivLaterPkgs != null && packageManager != null) {
+                for (int i=mLoadPrivLaterPkgs.size()-1; i>=0; i--) {
+                    int uid = mLoadPrivLaterPkgs.keyAt(i);
+                    String pkg = mLoadPrivLaterPkgs.valueAt(i);
+                    HashMap<String, Ops> pkgs = mUidOps.get(uid);
+                    if (pkgs == null) {
+                        continue;
+                    }
+                    Ops ops = pkgs.get(pkg);
+                    if (ops == null) {
+                        continue;
+                    }
+                    try {
+                        ApplicationInfo appInfo = packageManager.getApplicationInfo(
+                                pkg, 0, UserHandle.getUserId(uid));
+                        if (appInfo != null
+                                && (appInfo.flags & ApplicationInfo.FLAG_PRIVILEGED) != 0) {
+                            Slog.i(TAG, "Privileged package " + pkg);
+                            Ops newOps = new Ops(pkg, uid, true);
+                            for (int j=0; j<ops.size(); j++) {
+                                newOps.put(ops.keyAt(j), ops.valueAt(j));
+                            }
+                            pkgs.put(pkg, newOps);
+                            changed = true;
+                        }
+                    } catch (RemoteException e) {
+                        Slog.w(TAG, "Could not contact PackageManager", e);
+                    }
+                }
+                mLoadPrivLaterPkgs = null;
+            }
             if (changed) {
-                scheduleWriteLocked();
+                scheduleFastWriteLocked();
             }
         }
     }
@@ -289,7 +333,7 @@ public class AppOpsService extends IAppOpsService.Stub {
                     if (pkgs.size() <= 0) {
                         mUidOps.remove(uid);
                     }
-                    scheduleWriteLocked();
+                    scheduleFastWriteLocked();
                 }
             }
         }
@@ -299,7 +343,7 @@ public class AppOpsService extends IAppOpsService.Stub {
         synchronized (this) {
             if (mUidOps.indexOfKey(uid) >= 0) {
                 mUidOps.remove(uid);
-                scheduleWriteLocked();
+                scheduleFastWriteLocked();
             }
         }
     }
@@ -441,7 +485,7 @@ public class AppOpsService extends IAppOpsService.Stub {
                         // if there is nothing else interesting in it.
                         pruneOp(op, uid, packageName);
                     }
-                    scheduleWriteNowLocked();
+                    scheduleFastWriteLocked();
                 }
             }
         }
@@ -477,16 +521,20 @@ public class AppOpsService extends IAppOpsService.Stub {
     }
 
     @Override
-    public void resetAllModes() {
-        int callingUid = Binder.getCallingUid();
+    public void resetAllModes(int reqUserId, String reqPackageName) {
+        final int callingPid = Binder.getCallingPid();
+        final int callingUid = Binder.getCallingUid();
         mContext.enforcePermission(android.Manifest.permission.UPDATE_APP_OPS_STATS,
-                Binder.getCallingPid(), callingUid, null);
+                callingPid, callingUid, null);
+        reqUserId = ActivityManager.handleIncomingUser(callingPid, callingUid, reqUserId,
+                true, true, "resetAllModes", null);
         HashMap<Callback, ArrayList<Pair<String, Integer>>> callbacks = null;
         synchronized (this) {
             boolean changed = false;
             for (int i=mUidOps.size()-1; i>=0; i--) {
                 HashMap<String, Ops> packages = mUidOps.valueAt(i);
-                if (UserHandle.getUserId(callingUid) != UserHandle.getUserId(mUidOps.keyAt(i))) {
+                if (reqUserId != UserHandle.USER_ALL
+                        && reqUserId != UserHandle.getUserId(mUidOps.keyAt(i))) {
                     // Skip any ops for a different user
                     continue;
                 }
@@ -494,6 +542,10 @@ public class AppOpsService extends IAppOpsService.Stub {
                 while (it.hasNext()) {
                     Map.Entry<String, Ops> ent = it.next();
                     String packageName = ent.getKey();
+                    if (reqPackageName != null && !reqPackageName.equals(packageName)) {
+                        // Skip any ops for a different package
+                        continue;
+                    }
                     Ops pkgOps = ent.getValue();
                     for (int j=pkgOps.size()-1; j>=0; j--) {
                         Op curOp = pkgOps.valueAt(j);
@@ -521,7 +573,7 @@ public class AppOpsService extends IAppOpsService.Stub {
                 }
             }
             if (changed) {
-                scheduleWriteNowLocked();
+                scheduleFastWriteLocked();
             }
         }
         if (callbacks != null) {
@@ -946,12 +998,13 @@ public class AppOpsService extends IAppOpsService.Stub {
         }
     }
 
-    private void scheduleWriteNowLocked() {
-        if (!mWriteScheduled) {
+    private void scheduleFastWriteLocked() {
+        if (!mFastWriteScheduled) {
             mWriteScheduled = true;
+            mFastWriteScheduled = true;
+            mHandler.removeCallbacks(mWriteRunner);
+            mHandler.postDelayed(mWriteRunner, 10*1000);
         }
-        mHandler.removeCallbacks(mWriteRunner);
-        mHandler.post(mWriteRunner);
     }
 
     private Op getOpLocked(int code, int uid, String packageName, boolean edit) {
@@ -1090,21 +1143,10 @@ public class AppOpsService extends IAppOpsService.Stub {
         String isPrivilegedString = parser.getAttributeValue(null, "p");
         boolean isPrivileged = false;
         if (isPrivilegedString == null) {
-            try {
-                IPackageManager packageManager = ActivityThread.getPackageManager();
-                if (packageManager != null) {
-                    ApplicationInfo appInfo = ActivityThread.getPackageManager()
-                            .getApplicationInfo(pkgName, 0, UserHandle.getUserId(uid));
-                    if (appInfo != null) {
-                        isPrivileged = (appInfo.flags & ApplicationInfo.FLAG_PRIVILEGED) != 0;
-                    }
-                } else {
-                    // Could not load data, don't add to cache so it will be loaded later.
-                    return;
-                }
-            } catch (RemoteException e) {
-                Slog.w(TAG, "Could not contact PackageManager", e);
+            if (mLoadPrivLaterPkgs == null) {
+                mLoadPrivLaterPkgs = new SparseArray<String>();
             }
+            mLoadPrivLaterPkgs.put(uid, pkgName);
         } else {
             isPrivileged = Boolean.parseBoolean(isPrivilegedString);
         }
@@ -1390,12 +1432,11 @@ public class AppOpsService extends IAppOpsService.Stub {
                             pw.print(" ago");
                         }
                         if (op.duration == -1) {
-                            pw.println(" (running)");
-                        } else {
-                            pw.print("; duration=");
-                                    TimeUtils.formatDuration(op.duration, pw);
-                                    pw.println();
+                            pw.print(" (running)");
+                        } else if (op.duration != 0) {
+                            pw.print("; duration="); TimeUtils.formatDuration(op.duration, pw);
                         }
+                        pw.println();
                     }
                 }
             }
@@ -1459,15 +1500,18 @@ public class AppOpsService extends IAppOpsService.Stub {
 
         @Override
         public void run() {
+            PermissionDialog permDialog = null;
             synchronized (AppOpsService.this) {
                 Log.e(TAG, "Creating dialog box");
                 op.dialogReqQueue.register(request);
                 if (op.dialogReqQueue.getDialog() == null) {
-                    Dialog d = new PermissionDialog(mContext,
+                    permDialog = new PermissionDialog(mContext,
                             AppOpsService.this, code, uid, packageName);
-                    op.dialogReqQueue.setDialog((PermissionDialog)d);
-                    d.show();
+                    op.dialogReqQueue.setDialog(permDialog);
                 }
+            }
+            if (permDialog != null) {
+                permDialog.show();
             }
         }
     }
@@ -1589,7 +1633,7 @@ public class AppOpsService extends IAppOpsService.Stub {
                         // if there is nothing else interesting in it.
                         pruneOp(op, uid, packageName);
                     }
-                    scheduleWriteNowLocked();
+                    scheduleFastWriteLocked();
                 }
             }
         }
@@ -1606,7 +1650,7 @@ public class AppOpsService extends IAppOpsService.Stub {
     private void broadcastOpIfNeeded(int op) {
         switch (op) {
             case AppOpsManager.OP_SU:
-                mContext.sendBroadcast(new Intent(AppOpsManager.ACTION_SU_SESSION_CHANGED));
+                mHandler.post(mSuSessionChangedRunner);
                 break;
             default:
                 break;
@@ -1670,7 +1714,7 @@ public class AppOpsService extends IAppOpsService.Stub {
                 }
             }
             // ensure the counter reset persists
-            scheduleWriteNowLocked();
+            scheduleFastWriteLocked();
         }
     }
 }

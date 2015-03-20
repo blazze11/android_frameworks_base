@@ -21,6 +21,7 @@
 #include "AaptAssets.h"
 #include "AaptUtil.h"
 #include "ResourceFilter.h"
+#include "SdkConstants.h"
 
 using android::String8;
 using android::Vector;
@@ -215,9 +216,20 @@ bool parse(const String8& str, ConfigDescription* out) {
 
 success:
     if (out != NULL) {
+#ifndef HAVE_ANDROID_OS
         applyVersionForCompatibility(&config);
+#else
+        // Calling applyVersionForCompatibility when compiling a theme can cause
+        // the path to be changed by AAPT which results in the themed assets not being
+        // loaded.  The only time (as of right now) that aapt is run on an android device
+        // is when it is being used for themes, so this should be the correct behavior
+        // in this case.  If AAPT is ever used on an android device for some other reason,
+        // we will need to change this.
+        printf("AAPT is running on Android, skipping applyVersionForCompatibility");
+#endif
         *out = config;
     }
+
     return true;
 }
 
@@ -240,7 +252,9 @@ void applyVersionForCompatibility(ConfigDescription* config) {
     }
 
     uint16_t minSdk = 0;
-    if (config->smallestScreenWidthDp != ResTable_config::SCREENWIDTH_ANY
+    if (config->density == ResTable_config::DENSITY_ANY) {
+        minSdk = SDK_LOLLIPOP;
+    } else if (config->smallestScreenWidthDp != ResTable_config::SCREENWIDTH_ANY
             || config->screenWidthDp != ResTable_config::SCREENWIDTH_ANY
             || config->screenHeightDp != ResTable_config::SCREENHEIGHT_ANY) {
         minSdk = SDK_HONEYCOMB_MR2;
@@ -255,8 +269,6 @@ void applyVersionForCompatibility(ConfigDescription* config) {
                 != ResTable_config::SCREENLONG_ANY
             || config->density != ResTable_config::DENSITY_DEFAULT) {
         minSdk = SDK_DONUT;
-    } else if ((config->density == ResTable_config::DENSITY_ANY)) {
-        minSdk = SDK_L;
     }
 
     if (minSdk > config->sdkVersion) {
@@ -792,6 +804,25 @@ String8 getVersion(const ResTable_config& config) {
 
 bool isSameExcept(const ResTable_config& a, const ResTable_config& b, int axisMask) {
     return a.diff(b) == axisMask;
+}
+
+bool isDensityOnly(const ResTable_config& config) {
+    if (config.density == ResTable_config::DENSITY_DEFAULT) {
+        return false;
+    }
+
+    if (config.density == ResTable_config::DENSITY_ANY) {
+        if (config.sdkVersion != SDK_LOLLIPOP) {
+            // Someone modified the sdkVersion from the default, this is not safe to assume.
+            return false;
+        }
+    } else if (config.sdkVersion != SDK_DONUT) {
+        return false;
+    }
+
+    const uint32_t mask = ResTable_config::CONFIG_DENSITY | ResTable_config::CONFIG_VERSION;
+    const ConfigDescription nullConfig;
+    return (nullConfig.diff(config) & ~mask) == 0;
 }
 
 } // namespace AaptConfig

@@ -20,13 +20,13 @@ import android.content.Context;
 import android.graphics.drawable.AnimatedVectorDrawable;
 import android.graphics.drawable.AnimationDrawable;
 import android.graphics.drawable.Drawable;
+import android.provider.Settings;
 import android.service.notification.StatusBarNotification;
 import android.util.AttributeSet;
+import android.view.MotionEvent;
 import android.view.View;
-import android.view.ViewGroup;
 import android.view.ViewStub;
 import android.view.accessibility.AccessibilityEvent;
-
 import android.widget.ImageView;
 import com.android.systemui.R;
 
@@ -70,6 +70,7 @@ public class ExpandableNotificationRow extends ActivatableNotificationView {
     private NotificationGuts mGuts;
 
     private StatusBarNotification mStatusBarNotification;
+    private boolean mIsHeadsUp;
 
     public void setIconAnimationRunning(boolean running) {
         setIconAnimationRunning(running, mPublicLayout);
@@ -118,10 +119,15 @@ public class ExpandableNotificationRow extends ActivatableNotificationView {
 
     public void setStatusBarNotification(StatusBarNotification statusBarNotification) {
         mStatusBarNotification = statusBarNotification;
+        updateVetoButton();
     }
 
     public StatusBarNotification getStatusBarNotification() {
         return mStatusBarNotification;
+    }
+
+    public void setHeadsUp(boolean isHeadsUp) {
+        mIsHeadsUp = isHeadsUp;
     }
 
     public interface ExpansionLogger {
@@ -149,17 +155,25 @@ public class ExpandableNotificationRow extends ActivatableNotificationView {
         mShowingPublicInitialized = false;
         mIsSystemExpanded = false;
         mExpansionDisabled = false;
-        mPublicLayout.reset();
-        mPrivateLayout.reset();
+        mPublicLayout.reset(mIsHeadsUp);
+        mPrivateLayout.reset(mIsHeadsUp);
         resetHeight();
         logExpansionEvent(false, wasExpanded);
     }
 
     public void resetHeight() {
+        if (mIsHeadsUp) {
+            resetActualHeight();
+        }
         mMaxExpandHeight = 0;
         mWasReset = true;
         onHeightReset();
         requestLayout();
+    }
+
+    @Override
+    protected boolean filterMotionEvent(MotionEvent event) {
+        return mIsHeadsUp || super.filterMotionEvent(event);
     }
 
     @Override
@@ -194,11 +208,11 @@ public class ExpandableNotificationRow extends ActivatableNotificationView {
     }
 
     @Override
-    public void setDark(boolean dark, boolean fade) {
-        super.setDark(dark, fade);
+    public void setDark(boolean dark, boolean fade, long delay) {
+        super.setDark(dark, fade, delay);
         final NotificationContentView showing = getShowingLayout();
         if (showing != null) {
-            showing.setDark(dark, fade);
+            showing.setDark(dark, fade, delay);
         }
     }
 
@@ -213,6 +227,7 @@ public class ExpandableNotificationRow extends ActivatableNotificationView {
 
     public void setExpandable(boolean expandable) {
         mExpandable = expandable;
+        setClipToOutline(expandable);
     }
 
     /**
@@ -223,7 +238,12 @@ public class ExpandableNotificationRow extends ActivatableNotificationView {
     }
 
     public boolean isUserExpanded() {
-        return mUserExpanded;
+        if (Settings.System.getInt(mContext.getContentResolver(),
+                Settings.System.FORCE_EXPANDED_NOTIFICATIONS, 0) != 1) {
+            return mUserExpanded;
+        } else {
+            return true;
+        }
     }
 
     /**
@@ -291,17 +311,7 @@ public class ExpandableNotificationRow extends ActivatableNotificationView {
      * @return Can the underlying notification be cleared?
      */
     public boolean isClearable() {
-        return mClearable;
-    }
-
-    /**
-     * Set whether the notification can be cleared.
-     *
-     * @param clearable
-     */
-    public void setClearable(boolean clearable) {
-        mClearable = clearable;
-        updateVetoButton();
+        return mStatusBarNotification != null && mStatusBarNotification.isClearable();
     }
 
     /**

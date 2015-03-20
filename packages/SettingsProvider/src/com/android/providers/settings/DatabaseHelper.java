@@ -23,9 +23,14 @@ import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.IPackageManager;
 import android.content.pm.PackageManager;
+import android.content.pm.PackageManager.NameNotFoundException;
+import android.content.res.Configuration;
+import android.content.res.Resources;
+import android.content.res.ThemeConfig;
 import android.content.res.XmlResourceParser;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteStatement;
 import android.media.AudioManager;
@@ -43,6 +48,7 @@ import android.provider.Settings.Secure;
 import android.text.TextUtils;
 import android.util.Log;
 
+import com.android.ims.ImsConfig;
 import com.android.internal.content.PackageHelper;
 import com.android.internal.telephony.RILConstants;
 import com.android.internal.telephony.cdma.CdmaSubscriptionSourceManager;
@@ -70,7 +76,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     // database gets upgraded properly. At a minimum, please confirm that 'upgradeVersion'
     // is properly propagated through your change.  Not doing so will result in a loss of user
     // settings.
-    private static final int DATABASE_VERSION = 113;
+    private static final int DATABASE_VERSION = 126;
 
     private Context mContext;
     private int mUserHandle;
@@ -567,7 +573,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                 stmt = db.compileStatement("INSERT OR IGNORE INTO system(name,value)"
                         + " VALUES(?,?);");
                 loadSetting(stmt, Settings.System.VOLUME_BLUETOOTH_SCO,
-                        AudioManager.DEFAULT_STREAM_VOLUME[AudioManager.STREAM_BLUETOOTH_SCO]);
+                        AudioService.getDefaultStreamVolume(AudioManager.STREAM_BLUETOOTH_SCO));
                 db.setTransactionSuccessful();
             } finally {
                 db.endTransaction();
@@ -1833,6 +1839,195 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             upgradeVersion = 113;
         }
 
+        /************* The following are Custom changes ************/
+
+        if (upgradeVersion < 114) {
+            moveSettingsToNewTable(db, TABLE_SYSTEM, TABLE_SECURE,
+                    new String[] { Settings.Secure.VOLUME_LINK_NOTIFICATION }, true);
+            upgradeVersion = 114;
+        }
+
+        if (upgradeVersion < 115) {
+            // CM11 used "holo" as a system default theme. For CM12 and up its been
+            // switched to "system". So change all "holo" references in themeConfig to "system"
+            final String NAME_THEME_CONFIG = "themeConfig";
+            Cursor c = null;
+            try {
+                String[] projection = new String[]{"value"};
+                String selection = "name=?";
+                String[] selectionArgs = new String[] { NAME_THEME_CONFIG };
+                c = db.query(TABLE_SECURE, projection, selection,
+                        selectionArgs, null, null, null);
+                if (c != null && c.moveToFirst()) {
+                    String jsonConfig = c.getString(0);
+                    if (jsonConfig != null) {
+                        jsonConfig = jsonConfig.replace(
+                                "\"holo\"", '"' + ThemeConfig.SYSTEM_DEFAULT + '"');
+
+                        // Now update the entry
+                        SQLiteStatement stmt = db.compileStatement(
+                                "UPDATE " + TABLE_SECURE + " SET value = ? "
+                                        + " WHERE name = ?");
+                        stmt.bindString(1, jsonConfig);
+                        stmt.bindString(2, NAME_THEME_CONFIG);
+                        stmt.execute();
+                    }
+                }
+            } catch(SQLiteException ex) {
+                Log.e(TAG, "Unable to update theme config value", ex);
+            } finally {
+                if (c != null) c.close();
+            }
+        }
+
+        if (upgradeVersion < 116) {
+            String[] qsTiles = new String[] {
+                    Settings.Secure.QS_TILES,
+                    Settings.Secure.QS_USE_MAIN_TILES
+            };
+
+            moveSettingsToNewTable(db, TABLE_SYSTEM, TABLE_SECURE,
+                    qsTiles, true);
+            upgradeVersion = 116;
+        }
+
+        if (upgradeVersion < 117) {
+            String[] settingsToMove = new String[] {
+                    Settings.Secure.QS_SHOW_BRIGHTNESS_SLIDER,
+            };
+
+            moveSettingsToNewTable(db, TABLE_SYSTEM, TABLE_SECURE,
+                    settingsToMove, true);
+            upgradeVersion = 117;
+        }
+
+       if (upgradeVersion == 117) {
+            db.beginTransaction();
+            SQLiteStatement stmt = null;
+            try {
+                stmt = db.compileStatement("INSERT OR IGNORE INTO secure(name,value) VALUES(?,?);");
+                loadDefaultThemeSettings(stmt);
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
+                if (stmt != null) stmt.close();
+            }
+            upgradeVersion = 118;
+        }
+
+        if (upgradeVersion < 119) {
+            // only the owner has access to global table, so we need to check that here
+            if (mUserHandle == UserHandle.USER_OWNER) {
+                String[] globalToSecure = new String[] { Settings.Secure.POWER_MENU_ACTIONS };
+
+                moveSettingsToNewTable(db, TABLE_GLOBAL, TABLE_SECURE, globalToSecure, true);
+            }
+            upgradeVersion = 119;
+        }
+
+        if (upgradeVersion < 120) {
+            // Migrate from cm-12.0 if there is no entry from cm-11.0
+            db.beginTransaction();
+            SQLiteStatement stmt = null;
+            try {
+                stmt = db.compileStatement("INSERT OR IGNORE INTO secure(name,value)"
+                        + " VALUES(?,?);");
+                int quickPulldown = getIntValueFromSystem(db,
+                        Settings.System.STATUS_BAR_QUICK_QS_PULLDOWN,
+                        R.integer.def_qs_quick_pulldown);
+                loadSetting(stmt, Settings.System.QS_QUICK_PULLDOWN, quickPulldown);
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
+                if (stmt != null) stmt.close();
+            }
+            upgradeVersion = 120;
+        }
+
+        if (upgradeVersion < 121) {
+            db.beginTransaction();
+            SQLiteStatement stmt = null;
+            try {
+                stmt = db.compileStatement("INSERT OR IGNORE INTO secure(name,value)"
+                        + " VALUES(?,?);");
+                loadBooleanSetting(stmt, Secure.ADVANCED_MODE,
+                        R.bool.def_advanced_mode);
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
+                if (stmt != null) stmt.close();
+            }
+            upgradeVersion = 121;
+        }
+
+        // We skipped 122 to handle a merge conflict with the introduction of theater mode.
+
+        if (upgradeVersion < 123) {
+            if (mUserHandle == UserHandle.USER_OWNER) {
+                db.beginTransaction();
+                SQLiteStatement stmt = null;
+                try {
+                    stmt = db.compileStatement("INSERT OR IGNORE INTO global(name,value)"
+                            + " VALUES(?,?);");
+                    loadBooleanSetting(stmt, Global.THEATER_MODE_ON,
+                            R.bool.def_theater_mode_on);
+                    db.setTransactionSuccessful();
+                } finally {
+                    db.endTransaction();
+                    if (stmt != null) stmt.close();
+                }
+            }
+            upgradeVersion = 123;
+        }
+
+        if (upgradeVersion < 124) {
+            if (mUserHandle == UserHandle.USER_OWNER) {
+                db.beginTransaction();
+                SQLiteStatement stmt = null;
+                try {
+                    stmt = db.compileStatement("INSERT OR IGNORE INTO global(name,value)"
+                            + " VALUES(?,?);");
+                    loadSetting(stmt, Settings.Global.ENHANCED_4G_MODE_ENABLED, ImsConfig.FeatureValueConstants.ON);
+                    db.setTransactionSuccessful();
+                } finally {
+                    db.endTransaction();
+                    if (stmt != null) stmt.close();
+                }
+            }
+            upgradeVersion = 124;
+        }
+
+        if (upgradeVersion < 125) {
+            db.beginTransaction();
+            try {
+                String[] systemToSecure = {
+                        Settings.Secure.LOCK_TO_APP_EXIT_LOCKED
+                };
+                moveSettingsToNewTable(db, TABLE_SYSTEM, TABLE_SECURE, systemToSecure, true);
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
+            }
+            upgradeVersion = 125;
+        }
+
+        if (upgradeVersion < 126) {
+            // Reset rotation-lock-for-accessibility on upgrade, since it now hides the display
+            // setting.
+            db.beginTransaction();
+            SQLiteStatement stmt = null;
+            try {
+                stmt = db.compileStatement("INSERT OR REPLACE INTO system(name,value)"
+                        + " VALUES(?,?);");
+                loadSetting(stmt, Settings.System.HIDE_ROTATION_LOCK_TOGGLE_FOR_ACCESSIBILITY, 0);
+                db.setTransactionSuccessful();
+            } finally {
+                db.endTransaction();
+                if (stmt != null) stmt.close();
+            }
+            upgradeVersion = 126;
+        }
+
         // *** Remember to update DATABASE_VERSION above!
 
         if (upgradeVersion != currentVersion) {
@@ -2137,25 +2332,25 @@ public class DatabaseHelper extends SQLiteOpenHelper {
                     + " VALUES(?,?);");
 
             loadSetting(stmt, Settings.System.VOLUME_MUSIC,
-                    AudioManager.DEFAULT_STREAM_VOLUME[AudioManager.STREAM_MUSIC]);
+                    AudioService.getDefaultStreamVolume(AudioManager.STREAM_MUSIC));
             loadSetting(stmt, Settings.System.VOLUME_RING,
-                    AudioManager.DEFAULT_STREAM_VOLUME[AudioManager.STREAM_RING]);
+                    AudioService.getDefaultStreamVolume(AudioManager.STREAM_RING));
             loadSetting(stmt, Settings.System.VOLUME_SYSTEM,
-                    AudioManager.DEFAULT_STREAM_VOLUME[AudioManager.STREAM_SYSTEM]);
+                    AudioService.getDefaultStreamVolume(AudioManager.STREAM_SYSTEM));
             loadSetting(
                     stmt,
                     Settings.System.VOLUME_VOICE,
-                    AudioManager.DEFAULT_STREAM_VOLUME[AudioManager.STREAM_VOICE_CALL]);
+                    AudioService.getDefaultStreamVolume(AudioManager.STREAM_VOICE_CALL));
             loadSetting(stmt, Settings.System.VOLUME_ALARM,
-                    AudioManager.DEFAULT_STREAM_VOLUME[AudioManager.STREAM_ALARM]);
+                    AudioService.getDefaultStreamVolume(AudioManager.STREAM_ALARM));
             loadSetting(
                     stmt,
                     Settings.System.VOLUME_NOTIFICATION,
-                    AudioManager.DEFAULT_STREAM_VOLUME[AudioManager.STREAM_NOTIFICATION]);
+                    AudioService.getDefaultStreamVolume(AudioManager.STREAM_NOTIFICATION));
             loadSetting(
                     stmt,
                     Settings.System.VOLUME_BLUETOOTH_SCO,
-                    AudioManager.DEFAULT_STREAM_VOLUME[AudioManager.STREAM_BLUETOOTH_SCO]);
+                    AudioService.getDefaultStreamVolume(AudioManager.STREAM_BLUETOOTH_SCO));
 
             // By default:
             // - ringtones, notification, system and music streams are affected by ringer mode
@@ -2232,7 +2427,6 @@ public class DatabaseHelper extends SQLiteOpenHelper {
         String blackListValues = mContext.getResources()
                 .getString(R.string.def_heads_up_notification_blacklist_values);
         if (!TextUtils.isEmpty(dndValues)) {
-            loadSetting(stmt, Settings.System.HEADS_UP_NOTIFICATION, "0");
             loadSetting(stmt, Settings.System.HEADS_UP_CUSTOM_VALUES, dndValues);
             loadSetting(stmt, Settings.System.HEADS_UP_BLACKLIST_VALUES, blackListValues);
         }
@@ -2291,7 +2485,16 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             loadIntegerSetting(stmt, Settings.System.STATUS_BAR_NOTIF_COUNT,
                     R.integer.def_notif_count);
 
+            loadIntegerSetting(stmt, Settings.System.STATUS_BAR_BATTERY_STYLE,
+                    R.integer.def_battery_style);
+
             loadHeadsUpSetting(stmt);
+
+            loadIntegerSetting(stmt, Settings.System.ENABLE_PEOPLE_LOOKUP,
+                    R.integer.def_people_lookup);
+
+            loadIntegerSetting(stmt, Settings.System.QS_QUICK_PULLDOWN,
+                    R.integer.def_qs_quick_pulldown);
 
         } finally {
             if (stmt != null) stmt.close();
@@ -2320,6 +2523,12 @@ public class DatabaseHelper extends SQLiteOpenHelper {
     private void loadDefaultHapticSettings(SQLiteStatement stmt) {
         loadBooleanSetting(stmt, Settings.System.HAPTIC_FEEDBACK_ENABLED,
                 R.bool.def_haptic_feedback);
+    }
+
+    private void loadDefaultThemeSettings(SQLiteStatement stmt) {
+        loadStringSetting(stmt, Settings.Secure.DEFAULT_THEME_PACKAGE, R.string.def_theme_package);
+        loadStringSetting(stmt, Settings.Secure.DEFAULT_THEME_COMPONENTS,
+                R.string.def_theme_components);
     }
 
     private void loadSecureSettings(SQLiteDatabase db) {
@@ -2424,6 +2633,11 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
             loadIntegerSetting(stmt, Settings.Secure.SLEEP_TIMEOUT,
                     R.integer.def_sleep_timeout);
+
+            loadBooleanSetting(stmt, Settings.Secure.ADVANCED_MODE,
+                    R.bool.def_advanced_mode);
+
+            loadDefaultThemeSettings(stmt);
         } finally {
             if (stmt != null) stmt.close();
         }
@@ -2446,6 +2660,9 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             // --- Previously in 'system'
             loadBooleanSetting(stmt, Settings.Global.AIRPLANE_MODE_ON,
                     R.bool.def_airplane_mode_on);
+
+            loadBooleanSetting(stmt, Settings.Global.THEATER_MODE_ON,
+                    R.bool.def_theater_mode_on);
 
             loadStringSetting(stmt, Settings.Global.AIRPLANE_MODE_RADIOS,
                     R.string.def_airplane_mode_radios);
@@ -2567,11 +2784,13 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             // Set default cdma call auto retry
             loadSetting(stmt, Settings.Global.CALL_AUTO_RETRY, 0);
 
+            // Set default simplified carrier network settings to 0
+            loadSetting(stmt, Settings.Global.HIDE_CARRIER_NETWORK_SETTINGS, 0);
+
             // Set the preferred network mode to target desired value or Default
             // value defined in RILConstants
             int type;
-            type = SystemProperties.getInt("ro.telephony.default_network",
-                        RILConstants.PREFERRED_NETWORK_MODE);
+            type = RILConstants.PREFERRED_NETWORK_MODE;
             loadSetting(stmt, Settings.Global.PREFERRED_NETWORK_MODE, type);
 
             // Set the preferred cdma subscription source to target desired value or default
@@ -2591,9 +2810,16 @@ public class DatabaseHelper extends SQLiteOpenHelper {
 
             loadSetting(stmt, Settings.Global.DEVICE_NAME, getDefaultDeviceName());
 
+            loadIntegerSetting(stmt, Settings.Global.SEND_ACTION_APP_ERROR,
+                    R.integer.def_send_action_app_error);
+
             loadBooleanSetting(stmt, Settings.Global.GUEST_USER_ENABLED,
                     R.bool.def_guest_user_enabled);
+            loadSetting(stmt, Settings.Global.ENHANCED_4G_MODE_ENABLED, ImsConfig.FeatureValueConstants.ON);
             // --- New global settings start here
+            loadIntegerSetting(stmt, Settings.Global.TETHER_DUN_REQUIRED,
+                    R.integer.def_tether_dun_required);
+
         } finally {
             if (stmt != null) stmt.close();
         }

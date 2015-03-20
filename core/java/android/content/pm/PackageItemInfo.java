@@ -66,7 +66,14 @@ public class PackageItemInfo {
      * component's icon.  From the "icon" attribute or, if not set, 0.
      */
     public int icon;
-    
+
+    /**
+     * A drawable resource identifier in the icon pack's resources
+     * If there isn't an icon pack or not set, then 0.
+     * @hide
+     */
+    public int themedIcon;
+
     /**
      * A drawable resource identifier (in the package's resources) of this
      * component's banner.  From the "banner" attribute or, if not set, 0.
@@ -110,6 +117,7 @@ public class PackageItemInfo {
         logo = orig.logo;
         metaData = orig.metaData;
         showUserIcon = orig.showUserIcon;
+        themedIcon = orig.themedIcon;
     }
 
     /**
@@ -138,7 +146,7 @@ public class PackageItemInfo {
         }
         return packageName;
     }
-    
+
     /**
      * Retrieve the current graphical icon associated with this item.  This
      * will call back on the given PackageManager to load the icon from
@@ -153,6 +161,23 @@ public class PackageItemInfo {
      */
     public Drawable loadIcon(PackageManager pm) {
         return pm.loadItemIcon(this, getApplicationInfo());
+    }
+
+    /**
+     * Retrieve the current graphical icon associated with this item without
+     * the addition of a work badge if applicable.
+     * This will call back on the given PackageManager to load the icon from
+     * the application.
+     *
+     * @param pm A PackageManager from which the icon can be loaded; usually
+     * the PackageManager from which you originally retrieved this item.
+     *
+     * @return Returns a Drawable containing the item's icon.  If the
+     * item does not have an icon, the item's default icon is returned
+     * such as the default activity icon.
+     */
+    public Drawable loadUnbadgedIcon(PackageManager pm) {
+        return pm.loadUnbadgedItemIcon(this, getApplicationInfo());
     }
 
     /**
@@ -292,8 +317,9 @@ public class PackageItemInfo {
         dest.writeBundle(metaData);
         dest.writeInt(banner);
         dest.writeInt(showUserIcon);
+        dest.writeInt(themedIcon);
     }
-    
+
     protected PackageItemInfo(Parcel source) {
         name = source.readString();
         packageName = source.readString();
@@ -305,6 +331,7 @@ public class PackageItemInfo {
         metaData = source.readBundle();
         banner = source.readInt();
         showUserIcon = source.readInt();
+        themedIcon = source.readInt();
     }
 
     /**

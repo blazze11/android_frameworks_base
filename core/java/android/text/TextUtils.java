@@ -64,6 +64,11 @@ import java.util.regex.Pattern;
 public class TextUtils {
     private static final String TAG = "TextUtils";
 
+    /* package */ static final char[] ELLIPSIS_NORMAL = { '\u2026' }; // this is "..."
+    private static final String ELLIPSIS_STRING = new String(ELLIPSIS_NORMAL);
+
+    /* package */ static final char[] ELLIPSIS_TWO_DOTS = { '\u2025' }; // this is ".."
+    private static final String ELLIPSIS_TWO_DOTS_STRING = new String(ELLIPSIS_TWO_DOTS);
 
     private TextUtils() { /* cannot be instantiated */ }
 
@@ -1081,14 +1086,9 @@ public class TextUtils {
                                          float avail, TruncateAt where,
                                          boolean preserveLength,
                                          EllipsizeCallback callback) {
-
-        final String ellipsis = (where == TruncateAt.END_SMALL) ?
-                Resources.getSystem().getString(R.string.ellipsis_two_dots) :
-                Resources.getSystem().getString(R.string.ellipsis);
-
         return ellipsize(text, paint, avail, where, preserveLength, callback,
                 TextDirectionHeuristics.FIRSTSTRONG_LTR,
-                ellipsis);
+                (where == TruncateAt.END_SMALL) ? ELLIPSIS_TWO_DOTS_STRING : ELLIPSIS_STRING);
     }
 
     /**
@@ -1749,19 +1749,21 @@ public class TextUtils {
      * Be careful: this code will need to be updated when vertical scripts will be supported
      */
     public static int getLayoutDirectionFromLocale(Locale locale) {
+        boolean mirror = SystemProperties.getBoolean(Settings.Global.DEVELOPMENT_FORCE_RTL, false);
         if (locale != null && !locale.equals(Locale.ROOT)) {
             final String scriptSubtag = ICU.addLikelySubtags(locale).getScript();
             if (scriptSubtag == null) return getLayoutDirectionFromFirstChar(locale);
 
             if (scriptSubtag.equalsIgnoreCase(ARAB_SCRIPT_SUBTAG) ||
                     scriptSubtag.equalsIgnoreCase(HEBR_SCRIPT_SUBTAG)) {
-                return View.LAYOUT_DIRECTION_RTL;
+                // If forcing into RTL layout mode and language is RTL
+                // return LTR as default, else RTL
+                return mirror ? View.LAYOUT_DIRECTION_LTR : View.LAYOUT_DIRECTION_RTL;
             }
         }
-        // If forcing into RTL layout mode, return RTL as default, else LTR
-        return SystemProperties.getBoolean(Settings.Global.DEVELOPMENT_FORCE_RTL, false)
-                ? View.LAYOUT_DIRECTION_RTL
-                : View.LAYOUT_DIRECTION_LTR;
+        // If forcing into RTL layout mode and language is LTR
+        // return RTL as default, else LTR
+        return mirror ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR;
     }
 
     /**

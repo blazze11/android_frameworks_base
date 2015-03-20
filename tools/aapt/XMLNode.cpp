@@ -11,6 +11,7 @@
 #include <utils/ByteOrder.h>
 #include <errno.h>
 #include <string.h>
+#include <androidfw/AssetManager.h>
 
 #ifndef HAVE_MS_C_RUNTIME
 #define O_BINARY 0
@@ -234,9 +235,9 @@ status_t parseStyledString(Bundle* bundle,
             const String8 element8(element16);
 
             size_t nslen;
-            const uint16_t* ns = inXml->getElementNamespace(&nslen);
+            const char16_t* ns = inXml->getElementNamespace(&nslen);
             if (ns == NULL) {
-                ns = (const uint16_t*)"\0\0";
+                ns = (const char16_t*)"\0\0";
                 nslen = 0;
             }
             const String8 nspace(String16(ns, nslen));
@@ -291,9 +292,9 @@ moveon:
 
         } else if (code == ResXMLTree::END_TAG) {
             size_t nslen;
-            const uint16_t* ns = inXml->getElementNamespace(&nslen);
+            const char16_t* ns = inXml->getElementNamespace(&nslen);
             if (ns == NULL) {
-                ns = (const uint16_t*)"\0\0";
+                ns = (const char16_t*)"\0\0";
                 nslen = 0;
             }
             const String8 nspace(String16(ns, nslen));
@@ -422,7 +423,7 @@ static String8 make_prefix(int depth)
 }
 
 static String8 build_namespace(const Vector<namespace_entry>& namespaces,
-        const uint16_t* ns)
+        const char16_t* ns)
 {
     String8 str;
     if (ns != NULL) {
@@ -453,9 +454,9 @@ void printXMLBlock(ResXMLTree* block)
         int i;
         if (code == ResXMLTree::START_TAG) {
             size_t len;
-            const uint16_t* ns16 = block->getElementNamespace(&len);
+            const char16_t* ns16 = block->getElementNamespace(&len);
             String8 elemNs = build_namespace(namespaces, ns16);
-            const uint16_t* com16 = block->getComment(&len);
+            const char16_t* com16 = block->getComment(&len);
             if (com16) {
                 printf("%s <!-- %s -->\n", prefix.string(), String8(com16).string());
             }
@@ -503,7 +504,7 @@ void printXMLBlock(ResXMLTree* block)
         } else if (code == ResXMLTree::START_NAMESPACE) {
             namespace_entry ns;
             size_t len;
-            const uint16_t* prefix16 = block->getNamespacePrefix(&len);
+            const char16_t* prefix16 = block->getNamespacePrefix(&len);
             if (prefix16) {
                 ns.prefix = String8(prefix16);
             } else {
@@ -518,7 +519,7 @@ void printXMLBlock(ResXMLTree* block)
             depth--;
             const namespace_entry& ns = namespaces.top();
             size_t len;
-            const uint16_t* prefix16 = block->getNamespacePrefix(&len);
+            const char16_t* prefix16 = block->getNamespacePrefix(&len);
             String8 pr;
             if (prefix16) {
                 pr = String8(prefix16);
@@ -575,9 +576,51 @@ status_t parseXMLResource(const sp<AaptFile>& file, ResXMLTree* outTree,
     return NO_ERROR;
 }
 
+sp<XMLNode> XMLNode::parseFromZip(const sp<AaptFile>& file) {
+    AssetManager assets;
+    int32_t cookie;
+
+    if (!assets.addAssetPath(file->getZipFile(), &cookie)) {
+        fprintf(stderr, "Error: Could not open path %s\n", file->getZipFile().string());
+        return NULL;
+    }
+
+    Asset* asset = assets.openNonAsset(cookie, file->getSourceFile(), Asset::ACCESS_BUFFER);
+    ssize_t len = asset->getLength();
+    const void* buf = asset->getBuffer(false);
+
+    XML_Parser parser = XML_ParserCreateNS(NULL, 1);
+    ParseState state;
+    state.filename = file->getPrintableSource();
+    state.parser = parser;
+    XML_SetUserData(parser, &state);
+    XML_SetElementHandler(parser, startElement, endElement);
+    XML_SetNamespaceDeclHandler(parser, startNamespace, endNamespace);
+    XML_SetCharacterDataHandler(parser, characterData);
+    XML_SetCommentHandler(parser, commentData);
+
+    bool done = true;
+    if (XML_Parse(parser, (char*) buf, len, done) == XML_STATUS_ERROR) {
+        SourcePos(file->getSourceFile(), (int)XML_GetCurrentLineNumber(parser)).error(
+            "Error parsing XML: %s\n", XML_ErrorString(XML_GetErrorCode(parser)));
+        return NULL;
+    }
+    XML_ParserFree(parser);
+    if (state.root == NULL) {
+        SourcePos(file->getSourceFile(), -1).error("No XML data generated when parsing");
+    }
+    return state.root;
+}
+
 sp<XMLNode> XMLNode::parse(const sp<AaptFile>& file)
 {
     char buf[16384];
+
+    //Check for zip first
+    if (file->getZipFile().length() > 0) {
+        return parseFromZip(file);
+    }
+
     int fd = open(file->getSourceFile().string(), O_RDONLY | O_BINARY);
     if (fd < 0) {
         SourcePos(file->getSourceFile(), -1).error("Unable to open file for read: %s",

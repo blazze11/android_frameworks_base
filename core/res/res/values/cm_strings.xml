@@ -42,12 +42,30 @@
 
     <!-- label for item that opens the profile choosing dialog -->
     <string name="global_action_choose_profile">Profile</string>
-
+    <!-- label for item that screenshots in phone options dialog -->
+    <string name="global_action_screenshot">Screenshot</string>
 
     <!-- Title of a category of application permissions, listed so the user can choose whether they want to allow the application to do this. -->
     <string name="permgrouplab_security">Security</string>
     <!-- Description of a category of application permissions, listed so the user can choose whether they want to allow the application to do this. -->
     <string name="permgroupdesc_security">Permissions related to device security information.</string>
+
+    <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
+    <string name="permlab_accessThemeService">access theme service</string>
+    <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
+    <string name="permdesc_accessThemeService">Allows an app to access the theme service. Should never be needed for normal apps.</string>
+
+    <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
+    <string name="permlab_readThemes">read your theme info</string>
+    <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
+    <string name="permdesc_readThemesDesc">Allows the app to read your themes and
+       determine which theme you have applied.</string>
+
+    <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
+    <string name="permlab_writeThemes">modify your themes</string>
+    <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
+    <string name="permdesc_writeThemesDesc">Allows the app to insert new themes and
+       modify which theme you have applied.</string>
 
     <!-- [CHAR LIMIT=NONE] Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
     <string name="permlab_readPhoneBlacklist">read phone blacklist</string>
@@ -113,6 +131,13 @@
     <string name="adb_both_active_notification_title">ADB over USB &amp; network enabled</string>
     <!-- ADB notification message-->
     <string name="adb_active_generic_notification_message">Touch to disable debugging.</string>
+    <!-- USB_PREFERENCES: Notification for when no USB options chosen.  This is the title -->
+    <string name="usb_choose_notification_title">Touch to choose USB options.</string>
+
+    <!-- Title of an application permission, listed so the user can choose whether they want the application to do this. -->
+    <string name="permlab_interceptPackageLaunch">intercept app launch</string>
+    <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
+    <string name="permdesc_interceptPackageLaunch">Allows an app to intercept launch of other apps</string>
 
     <!-- App ops requests -->
     <string name="app_ops_access_camera">access the camera</string>
@@ -188,15 +213,6 @@
     <!-- Storage description for UICC storage. [CHAR LIMIT=NONE] -->
     <string name="storage_uicc">UICC storage</string>
 
-    <!-- Displayed when the USSD/SS request is modified by STK CC to a
-    different request. This will be displayed in a toast. -->
-    <string name="stk_cc_ussd_to_dial">USSD request is modified to DIAL request.</string>
-    <string name="stk_cc_ussd_to_ss">USSD request is modified to SS request.</string>
-    <string name="stk_cc_ussd_to_ussd">USSD request is modified to new USSD request.</string>
-    <string name="stk_cc_ss_to_dial">SS request is modified to DIAL request.</string>
-    <string name="stk_cc_ss_to_ussd">SS request is modified to USSD request.</string>
-    <string name="stk_cc_ss_to_ss">SS request is modified to new SS request.</string>
-
     <!-- Carrier Name -->
     <string name="China_Mobile">China Mobile</string>
     <string name="China_Unicom">China Unicom</string>
@@ -212,4 +228,47 @@
     <string name="def_wifi_wifihotspot_pass" translatable="false"></string>
     <!-- Default wi-fi direct name -->
     <string name="def_wifi_direct_name" translatable="false"></string>
+
+    <!-- Performance profile modes -->
+    <string name="perf_profile_pwrsv">Power save</string>
+    <string name="perf_profile_bal">Balanced</string>
+    <string name="perf_profile_perf">Performance</string>
+
+    <!-- Theme installation error notification -->
+    <string name="theme_install_error_title">Failed to install theme</string>
+    <string name="theme_install_error_message">%s failed to install</string>
+
+    <!-- [CHAR LIMIT=NONE] Message shown in dialog on first boot after clean install for each .apk that is optimized. -->
+    <string name="android_installing_apk">Installing app
+        <xliff:g id="number" example="123">%1$d</xliff:g> of
+        <xliff:g id="number" example="123">%2$d</xliff:g>.</string>
+
+    <!-- [CHAR LIMIT=40] Title of dialog that is shown when performing a system install. -->
+    <string name="android_installing_title">Android is installing\u2026</string>
+
+    <string name="theme_reset_notification_title">Theme reset</string>
+    <string name="theme_reset_notification_body">System theme restored due to multiple app crashes.</string>
+
+    <!-- Title of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
+    <string name="permlab_accessTorchService">access torch service</string>
+    <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
+    <string name="permdesc_accessTorchService">Allows an app to access the torch service. Should never be needed for normal apps.</string>
+
+    <string name="permlab_preventpower">override power key</string>
+    <!-- Description of an application permission, listed so the user can choose whether they want to allow the application to do this. -->
+    <string name="permdesc_preventpower">Allows an app to override the power key.</string>
+
+    <!-- LiveDisplay strings -->
+    <string name="live_display_title" translatable="false">LiveDisplay</string>
+    <string name="live_display_auto">Automatic</string>
+    <string name="live_display_auto_summary">Automatically adjust color temperature of screen after sunset and sunrise</string>
+    <string name="live_display_off">Off</string>
+    <string name="live_display_off_summary">Disable all adjustments</string>
+    <string name="live_display_day">Day</string>
+    <string name="live_display_day_summary">Use day settings only</string>
+    <string name="live_display_night">Night</string>
+    <string name="live_display_night_summary">Use night settings only</string>
+    <string name="live_display_outdoor">Outdoor (bright sun)</string>
+    <string name="live_display_outdoor_summary">Use outdoor settings only</string>
+    <string name="live_display_hint">LiveDisplay can help reduce eyestrain and help you sleep at night. Click here to try it out!</string>
 </resources>

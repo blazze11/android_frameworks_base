@@ -32,11 +32,16 @@ public final class PhoneStatusBarTransitions extends BarTransitions {
     private final PhoneStatusBarView mView;
     private final float mIconAlphaWhenOpaque;
 
-    private View mLeftSide, mStatusIcons, mSignalCluster, mBattery, mClock, mCenterClock;
+    private View mLeftSide, mStatusIcons, mSignalCluster, mBattery, mClock,
+                mNetworkTraffic, mCarrierLabel;
+
     private Animator mCurrentAnimation;
 
     public PhoneStatusBarTransitions(PhoneStatusBarView view) {
-        super(view, R.drawable.status_background);
+        super(view, R.drawable.status_background, R.color.status_bar_background_opaque,
+                R.color.status_bar_background_semi_transparent,
+                R.color.status_bar_background_transparent,
+                com.android.internal.R.color.battery_saver_mode_color);
         mView = view;
         final Resources res = mView.getContext().getResources();
         mIconAlphaWhenOpaque = res.getFraction(R.dimen.status_bar_icon_drawing_alpha, 1, 1);
@@ -48,7 +53,8 @@ public final class PhoneStatusBarTransitions extends BarTransitions {
         mSignalCluster = mView.findViewById(R.id.signal_cluster);
         mBattery = mView.findViewById(R.id.battery);
         mClock = mView.findViewById(R.id.clock);
-        mCenterClock = mView.findViewById(R.id.center_clock);
+        mNetworkTraffic = mView.findViewById(R.id.networkTraffic);
+        mCarrierLabel = mView.findViewById(R.id.statusbar_carrier_text);
         applyModeBackground(-1, getMode(), false /*animate*/);
         applyMode(getMode(), false /*animate*/);
     }
@@ -58,19 +64,19 @@ public final class PhoneStatusBarTransitions extends BarTransitions {
     }
 
     private float getNonBatteryClockAlphaFor(int mode) {
-        return mode == MODE_LIGHTS_OUT ? ICON_ALPHA_WHEN_LIGHTS_OUT_NON_BATTERY_CLOCK
+        return isLightsOut(mode) ? ICON_ALPHA_WHEN_LIGHTS_OUT_NON_BATTERY_CLOCK
                 : !isOpaque(mode) ? ICON_ALPHA_WHEN_NOT_OPAQUE
                 : mIconAlphaWhenOpaque;
     }
 
     private float getBatteryClockAlpha(int mode) {
-        return mode == MODE_LIGHTS_OUT ? ICON_ALPHA_WHEN_LIGHTS_OUT_BATTERY_CLOCK
+        return isLightsOut(mode) ? ICON_ALPHA_WHEN_LIGHTS_OUT_BATTERY_CLOCK
                 : getNonBatteryClockAlphaFor(mode);
     }
 
     private boolean isOpaque(int mode) {
         return !(mode == MODE_SEMI_TRANSPARENT || mode == MODE_TRANSLUCENT
-                || mode == MODE_TRANSPARENT);
+                || mode == MODE_TRANSPARENT || mode == MODE_LIGHTS_OUT_TRANSPARENT);
     }
 
     @Override
@@ -90,24 +96,26 @@ public final class PhoneStatusBarTransitions extends BarTransitions {
             AnimatorSet anims = new AnimatorSet();
             anims.playTogether(
                     animateTransitionTo(mLeftSide, newAlpha),
+                    animateTransitionTo(mCarrierLabel, newAlpha),
                     animateTransitionTo(mStatusIcons, newAlpha),
                     animateTransitionTo(mSignalCluster, newAlpha),
+                    animateTransitionTo(mNetworkTraffic, newAlpha),
                     animateTransitionTo(mBattery, newAlphaBC),
-                    animateTransitionTo(mClock, newAlphaBC),
-                    animateTransitionTo(mCenterClock, newAlphaBC)
+                    animateTransitionTo(mClock, newAlphaBC)
                     );
-            if (mode == MODE_LIGHTS_OUT) {
+            if (isLightsOut(mode)) {
                 anims.setDuration(LIGHTS_OUT_DURATION);
             }
             anims.start();
             mCurrentAnimation = anims;
         } else {
             mLeftSide.setAlpha(newAlpha);
+            mCarrierLabel.setAlpha(newAlpha);
             mStatusIcons.setAlpha(newAlpha);
             mSignalCluster.setAlpha(newAlpha);
+            mNetworkTraffic.setAlpha(newAlpha);
             mBattery.setAlpha(newAlphaBC);
             mClock.setAlpha(newAlphaBC);
-            mCenterClock.setAlpha(newAlphaBC);
         }
     }
 }

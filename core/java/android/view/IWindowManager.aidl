@@ -96,6 +96,7 @@ interface IWindowManager
     void overridePendingAppTransitionAspectScaledThumb(in Bitmap srcThumb, int startX,
             int startY, int targetWidth, int targetHeight, IRemoteCallback startedCallback,
             boolean scaleUp);
+    void overridePendingAppTransitionInPlace(String packageName, int anim);
     void executeAppTransition();
     void setAppStartingWindow(IBinder token, String pkg, int theme,
             in CompatibilityInfo compatInfo, CharSequence nonLocalizedLabel, int labelRes,
@@ -221,6 +222,16 @@ interface IWindowManager
      */
     Bitmap screenshotApplications(IBinder appToken, int displayId, int maxWidth,
             int maxHeight, boolean force565);
+
+    /**
+     * Get the current x offset for the wallpaper
+     */
+    int getLastWallpaperX();
+
+    /**
+     * Get the current y offset for the wallpaper
+     */
+    int getLastWallpaperY();
 
     /**
      * Called by the status bar to notify Views of changes to System UI visiblity.
